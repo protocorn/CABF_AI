@@ -1,65 +1,101 @@
-# AI Document Generator
+# AI Document Generator with Pinecone Integration
 
-A web application that generates different types of documents (PDF, DOCX, PowerPoint, social media posts, grant proposals) based on user queries using Google's Gemini 1.5 Flash model.
+This application allows you to generate various types of documents (including grant proposals, PDFs, DOCX, presentations, and social media content) using Google's Gemini AI. It also includes a Pinecone vector database integration to search and use relevant documents as context for more accurate content generation.
 
 ## Features
 
-- Generate structured document content based on user queries
-- Support for different output formats (PDF, DOCX, PowerPoint, Grant Proposals, Twitter, Instagram)
-- Specify number of pages or slides
-- Real-time content generation with Gemini 1.5 Flash AI model
-- Format-specific structured output for each document type
+- Generate various document types (grant proposals, PDFs, DOCX, presentations)
+- Search relevant documents in the Capital Area Food Bank (CABF) vector database
+- Use retrieved documents as context for more accurate document generation
+- Edit generated content with AI assistance
+- Export documents in various formats
 
-## Structured Output by Format
+## Prerequisites
 
-The application provides tailored structured content for each document type:
+- Node.js (v14 or higher)
+- npm (v6 or higher)
+- Google Gemini API key
+- Pinecone API key
+- Pinecone index setup with 512 dimensions
 
-- **PDF/DOCX**: Properly formatted with title, introduction, main sections, and conclusion
-- **PowerPoint**: Slide-by-slide content with titles and bullet points
-- **Grant Proposal**: Comprehensive structure with executive summary, organization background, problem statement, project description, timeline, budget, expected outcomes, evaluation plan, sustainability, and conclusion
-- **Twitter/X**: Post content, relevant hashtags, and engagement prompts
-- **Instagram**: Formatted caption with storytelling elements and hashtags
+## Installation
 
-## Setup Instructions
+1. Clone the repository
+```bash
+git clone <repository-url>
+cd ai-document-generator
+```
 
-1. Clone this repository
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Set up your Gemini API key:
-   - Get an API key from Google AI Studio (https://makersuite.google.com/)
-   - Create a `.env` file in the root directory by copying `.env.example`:
-     ```
-     GEMINI_API_KEY=your_api_key_here
-     ```
+2. Install dependencies
+```bash
+npm install
+```
 
-4. Start the server:
-   ```
-   npm start
-   ```
-   
-   For development with automatic restarts:
-   ```
-   npm run dev
-   ```
+3. Create a `.env` file based on the example
+```bash
+cp .env.example .env
+```
 
-5. Open your browser and navigate to `http://localhost:3000`
+4. Add your API keys to the `.env` file
+```
+GEMINI_API_KEY=your_gemini_api_key
+PINECONE_API_KEY=your_pinecone_api_key
+PORT=3030
+```
+
+## Pinecone Setup
+
+1. Create a Pinecone account at [pinecone.io](https://www.pinecone.io)
+2. Create a new index with the following configuration:
+   - Name: `cabf-docs` (or update the INDEX_NAME constant in src/pinecone.js)
+   - Dimensions: 512
+   - Metric: cosine
+   - Pod Type: starter or higher
+
+3. Add your documents to the index (you'll need to convert them to vector embeddings first)
+
+## Running the Application
+
+### Development mode
+```bash
+npm run dev
+```
+
+### Production mode
+```bash
+npm start
+```
+
+The application will be available at `http://localhost:3030` (or whatever PORT you specified in the .env file).
 
 ## Usage
 
-1. Select the output format (PDF, DOCX, PPT, Twitter/X, Instagram)
-2. Specify the number of pages/slides you need (for documents/presentations)
-3. Enter your query for document generation
-4. Click "Generate Document"
-5. View the structured generated content formatted appropriately for your selection
+1. **Generate Documents**:
+   - Select output format (PDF, DOCX, PowerPoint, Grant Proposal, etc.)
+   - Enter your query
+   - Click "Generate Document"
 
-## Technologies Used
+2. **Search Documents**:
+   - Go to the "Search Documents" tab
+   - Enter your search query
+   - Click "Search Documents"
+   - Select relevant documents
+   - Click "Use Selected Documents for Generation"
+   - Go back to the Generate tab to create a document with this context
 
-- Frontend: HTML, CSS, JavaScript
-- Backend: Node.js, Express
-- AI: Google Gemini 1.5 Flash
+3. **Edit Generated Content**:
+   - Click "Edit Content" on a generated document
+   - Modify fields manually or use AI-assisted editing
+
+## Troubleshooting
+
+### Dimension Mismatch
+If you encounter dimension mismatch errors with Pinecone, ensure your index is configured with 512 dimensions to match the processed embeddings from the Gemini API.
+
+### API Key Issues
+- For Gemini API: Make sure you have enabled the Gemini API in your Google Cloud account
+- For Pinecone: Verify the API key has proper permissions for the index
 
 ## License
 
-MIT 
+[MIT](LICENSE) 
