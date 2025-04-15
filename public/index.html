@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Document Generator</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Document Generator</h1>
+        
+        <div class="tabs-container">
+            <div class="tabs-header">
+                <button class="tab-button active" data-tab="generate">Generate Content</button>
+                <button class="tab-button" data-tab="search">Search Documents</button>
+            </div>
+            
+            <div class="tab-content">
+                <!-- Generate Content Tab -->
+                <div class="tab-pane active" id="generate-tab">
+                    <div class="card">
+                        <div class="form-group">
+                            <label>Select Output Format</label>
+                            <select id="outputType">
+                                <option value="pdf">PDF</option>
+                                <option value="docx">DOCX</option>
+                                <option value="ppt">PowerPoint (PPT)</option>
+                                <option value="grant">Grant Proposal</option>
+                                <option value="x">Twitter Post</option>
+                                <option value="instagram">Instagram Post</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group hidden" id="grantTypeGroup">
+                            <label>Select Grant Type</label>
+                            <select id="grantType">
+                                <option value="rfp">Grant RFP Template</option>
+                                <option value="generic">Generic Grant Proposal Template</option>
+                                <option value="nonprofit">Non-profit Grant Proposal Template</option>
+                                <option value="research">Research Grant Proposal Template</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="pagesGroup">
+                            <label>How many pages/slides?</label>
+                            <input type="number" min="1" value="1" id="numPages">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Enter Query for Generation</label>
+                            <textarea placeholder="What do you want to generate?" id="query"></textarea>
+                        </div>
+
+                        <button id="generateBtn">Generate Document</button>
+                    </div>
+
+                    <div class="result-container">
+                        <h2>Generated Content</h2>
+                        <div class="output-actions" id="outputActions">
+                            <!-- Action buttons will appear here for grant proposals -->
+                        </div>
+                        <div id="output-container">
+                            <div id="loading" class="hidden">Generating content...</div>
+                            <div id="output-content"></div>
+                            <div id="edit-content" class="hidden">
+                                <div class="document-form">
+                                    <div class="form-header">
+                                        <h3>Edit Document Content</h3>
+                                    </div>
+                                    <div class="form-fields">
+                                        <!-- Fields will be added dynamically based on document type -->
+                                    </div>
+                                    <div class="edit-actions">
+                                        <button id="save-edits" class="action-btn"><i class="fas fa-save"></i> Save Changes</button>
+                                        <button id="cancel-edits" class="action-btn secondary-btn"><i class="fas fa-times"></i> Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Search Documents Tab -->
+                <div class="tab-pane" id="search-tab">
+                    <div class="card">
+                        <div class="form-group">
+                            <label>Search Capital Area Food Bank Documents</label>
+                            <textarea placeholder="Enter your search query..." id="searchQuery"></textarea>
+                        </div>
+                        <button id="searchBtn">Search Documents</button>
+                    </div>
+                    
+                    <div class="result-container">
+                        <h2>Relevant Documents</h2>
+                        <div id="search-loading" class="hidden">Searching documents...</div>
+                        <div id="search-results"></div>
+                        <div class="search-actions hidden" id="searchActions">
+                            <button id="useSelectedBtn" class="action-btn"><i class="fas fa-file-import"></i> Use Selected Documents for Generation</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Template Modal for Grant Proposals -->
+        <div id="templateModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Grant RFP Template</h2>
+                    <span class="close-modal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="template-form">
+                        <div class="template-header">
+                            <div class="template-field">
+                                <label>Posting Date</label>
+                                <div class="input-with-copy">
+                                    <input type="text" id="postingDate" placeholder="Enter posting date">
+                                    <button class="copy-btn" data-target="posting-date" title="Copy from generated content">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="template-field">
+                                <label>Grant Name</label>
+                                <div class="input-with-copy">
+                                    <input type="text" id="grantTitle" placeholder="Enter grant name">
+                                    <button class="copy-btn" data-target="title" title="Copy from generated content">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="template-header">
+                            <div class="template-field">
+                                <label>Solicited By</label>
+                                <div class="input-with-copy">
+                                    <input type="text" id="solicitedBy" placeholder="Enter soliciting organization">
+                                    <button class="copy-btn" data-target="solicited-by" title="Copy from generated content">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="template-field">
+                                <label>Address of Soliciting Party</label>
+                                <div class="input-with-copy">
+                                    <input type="text" id="solicitingAddress" placeholder="Enter address">
+                                    <button class="copy-btn" data-target="soliciting-address" title="Copy from generated content">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section I -->
+                        <div class="template-field">
+                            <label>I. Purpose of Request for Proposal</label>
+                            <div class="input-with-copy">
+                                <textarea id="purpose" placeholder="Enter purpose"></textarea>
+                                <button class="copy-btn" data-target="purpose" title="Copy from generated content">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Section II -->
+                        <div class="template-field">
+                            <label>II. Organization Background</label>
+                            <div class="input-with-copy">
+                                <textarea id="orgBackground" placeholder="Enter organization background"></textarea>
+                                <button class="copy-btn" data-target="organization-background" title="Copy from generated content">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Section III -->
+                        <div class="template-field">
+                            <label>III. Timeline for Scope of Services</label>
+                            <div class="input-with-copy">
+                                <textarea id="timeline" placeholder="Enter timeline information"></textarea>
+                                <button class="copy-btn" data-target="timeline" title="Copy from generated content">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Section IV -->
+                        <div class="template-field">
+                            <label>IV. Scope of Services</label>
+                            <div class="section-parts">
+                                <div class="template-sub-field">
+                                    <label>A. Grant Application Period</label>
+                                    <div class="input-with-copy">
+                                        <textarea id="applicationPeriod" placeholder="Enter grant application period"></textarea>
+                                        <button class="copy-btn" data-target="application-period" title="Copy from generated content">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="template-sub-field">
+                                    <label>B. Prior to Final Grant Submissions</label>
+                                    <div class="input-with-copy">
+                                        <textarea id="priorToSubmissions" placeholder="Enter information"></textarea>
+                                        <button class="copy-btn" data-target="prior-submissions" title="Copy from generated content">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="template-sub-field">
+                                    <label>C. After Final Grant Submissions</label>
+                                    <div class="input-with-copy">
+                                        <textarea id="afterSubmissions" placeholder="Enter information"></textarea>
+                                        <button class="copy-btn" data-target="after-submissions" title="Copy from generated content">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="template-sub-field">
+                                    <label>D. Underwriting Period</label>
+                                    <div class="input-with-copy">
+                                        <textarea id="underwritingPeriod" placeholder="Enter information"></textarea>
+                                        <button class="copy-btn" data-target="underwriting-period" title="Copy from generated content">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="template-sub-field">
+                                    <label>E. Underwriting Review</label>
+                                    <div class="input-with-copy">
+                                        <textarea id="underwritingReview" placeholder="Enter information"></textarea>
+                                        <button class="copy-btn" data-target="underwriting-review" title="Copy from generated content">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="template-sub-field">
+                                    <label>F. Revisions and Final Report</label>
+                                    <div class="input-with-copy">
+                                        <textarea id="revisionsReport" placeholder="Enter information"></textarea>
+                                        <button class="copy-btn" data-target="revisions-report" title="Copy from generated content">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section V -->
+                        <div class="template-field">
+                            <label>V. Submission Process</label>
+                            <div class="input-with-copy">
+                                <textarea id="submissionProcess" placeholder="Enter submission process"></textarea>
+                                <button class="copy-btn" data-target="submission-process" title="Copy from generated content">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Section VI -->
+                        <div class="template-field">
+                            <label>VI. Questions / Inquiries Information</label>
+                            <div class="input-with-copy">
+                                <textarea id="inquiries" placeholder="Enter inquiries information"></textarea>
+                                <button class="copy-btn" data-target="inquiries" title="Copy from generated content">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="template-actions">
+                            <button id="exportTemplate" class="primary-btn">Export as Word Document (.docx)</button>
+                            <button id="copyAllFields" class="secondary-btn">Copy All Fields</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+</html> 
