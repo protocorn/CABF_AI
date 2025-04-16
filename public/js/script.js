@@ -2841,8 +2841,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeVersionHistory = document.getElementById('closeVersionHistory');
     const saveVersionBtn = document.getElementById('saveVersionBtn');
     
+    // Create an empty initial version for testing
+    (function createTestVersion() {
+        // Only create a test version if no versions exist yet
+        if (documentVersions.length === 0) {
+            const emptyContent = '<div class="document-container"><p>No document generated yet. This is an empty placeholder.</p></div>';
+            addDocumentVersion(emptyContent, 'Empty Document', 'docx', '');
+            console.log('Created test version for version history');
+        }
+    })();
+    
     // Initialize version history when a document is generated
     function initializeVersionHistory(content, outputType, grantType) {
+        console.log('Initializing version history');
+        
         // Reset version history
         documentVersions = [];
         currentVersionIndex = -1;
@@ -2852,12 +2864,30 @@ document.addEventListener('DOMContentLoaded', function() {
         addDocumentVersion(content, 'Initial Version', outputType, grantType);
         
         // Make sure the version history toggle is visible
-        versionHistoryToggle.classList.remove('hidden');
         versionHistoryToggle.style.display = 'block';
+        
+        // Display a notification to the user
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = 'Document version history is now available. Click "Version History" to view.';
+        notification.style.cssText = 'background-color: #e6f7ff; border: 1px solid #91d5ff; color: #0050b3; padding: 10px; border-radius: 4px; margin-top: 10px; text-align: center;';
+        
+        // Add notification before the content
+        const outputContainer = document.getElementById('output-container');
+        outputContainer.insertBefore(notification, outputContent);
+        
+        // Remove notification after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
     }
     
     // Add a new version to the history
     function addDocumentVersion(content, description, outputType, grantType) {
+        console.log('Adding document version:', description);
+        
         const timestamp = new Date();
         const version = {
             content,
@@ -2877,6 +2907,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Render the version history list
     function renderVersionHistory() {
+        console.log('Rendering version history, total versions:', documentVersions.length);
+        
         versionHistoryList.innerHTML = '';
         
         documentVersions.forEach((version, index) => {
@@ -2911,6 +2943,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // View a specific version of the document
     function viewDocumentVersion(index) {
+        console.log('Viewing document version:', index);
+        
         if (index < 0 || index >= documentVersions.length) return;
         
         // Update current index
@@ -2934,6 +2968,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add the revert button to the top of the content
             const revertContainer = document.createElement('div');
             revertContainer.className = 'revert-container';
+            revertContainer.style.cssText = 'margin-bottom: 15px; text-align: center;';
             revertContainer.appendChild(revertBtn);
             outputContent.insertBefore(revertContainer, outputContent.firstChild);
         }
@@ -2944,59 +2979,31 @@ document.addEventListener('DOMContentLoaded', function() {
             node.classList.toggle('active', parseInt(node.dataset.index) === index);
         });
     }
-    
-    // Revert to a previous version
-    function revertToVersion(index) {
-        if (index < 0 || index >= documentVersions.length) return;
-        
-        const confirmRevert = confirm('Are you sure you want to revert to this version? This will create a new version with the reverted content.');
-        if (!confirmRevert) return;
-        
-        const version = documentVersions[index];
-        addDocumentVersion(
-            version.content, 
-            `Reverted to Version ${index + 1}`, 
-            version.outputType, 
-            version.grantType
-        );
-        
-        // View the newly created version
-        viewDocumentVersion(documentVersions.length - 1);
-    }
-    
-    // Save current document as a new version
-    function saveCurrentVersion() {
-        // Get the current document content
-        const currentContent = outputContent.innerHTML;
-        
-        // Display a dialog to enter version description
-        const description = prompt('Enter a description for this version:', 'Updated version');
-        if (!description) return; // User cancelled
-        
-        // Get current document type
-        const currentVersion = documentVersions[currentVersionIndex];
-        
-        // Add as a new version
-        addDocumentVersion(
-            currentContent, 
-            description, 
-            currentVersion.outputType, 
-            currentVersion.grantType
-        );
-        
-        // View the newly created version
-        viewDocumentVersion(documentVersions.length - 1);
-    }
-    
+
     // Event listeners for version history
-    versionHistoryToggle.addEventListener('click', () => {
+    versionHistoryToggle.addEventListener('click', function() {
         console.log('Version history toggle clicked');
-        versionHistoryContainer.classList.remove('hidden');
-        versionHistoryOverlay.classList.add('visible');
-        document.getElementById('output-container').classList.add('with-version-history');
         
-        // Force a redraw of the version history
-        renderVersionHistory();
+        // Toggle the version history container
+        const isHidden = versionHistoryContainer.classList.contains('hidden');
+        
+        if (isHidden) {
+            // Show version history
+            versionHistoryContainer.classList.remove('hidden');
+            versionHistoryOverlay.classList.add('visible');
+            document.getElementById('output-container').classList.add('with-version-history');
+            
+            // Force a redraw of the version history
+            renderVersionHistory();
+            
+            // Also add an alert to verify the click is happening
+            alert('Opening version history. Total versions: ' + documentVersions.length);
+        } else {
+            // Hide version history
+            versionHistoryContainer.classList.add('hidden');
+            versionHistoryOverlay.classList.remove('visible');
+            document.getElementById('output-container').classList.remove('with-version-history');
+        }
     });
     
     closeVersionHistory.addEventListener('click', () => {
@@ -3072,5 +3079,55 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return result;
     };
+
+    // Revert to a previous version
+    function revertToVersion(index) {
+        console.log('Reverting to version:', index);
+        
+        if (index < 0 || index >= documentVersions.length) return;
+        
+        const confirmRevert = confirm('Are you sure you want to revert to this version? This will create a new version with the reverted content.');
+        if (!confirmRevert) return;
+        
+        const version = documentVersions[index];
+        addDocumentVersion(
+            version.content, 
+            `Reverted to Version ${index + 1}`, 
+            version.outputType, 
+            version.grantType
+        );
+        
+        // View the newly created version
+        viewDocumentVersion(documentVersions.length - 1);
+    }
+    
+    // Save current document as a new version
+    function saveCurrentVersion() {
+        console.log('Saving current version');
+        
+        // Get the current document content
+        const currentContent = outputContent.innerHTML;
+        
+        // Display a dialog to enter version description
+        const description = prompt('Enter a description for this version:', 'Updated version');
+        if (!description) return; // User cancelled
+        
+        // Get current document type
+        const currentVersion = documentVersions[currentVersionIndex];
+        
+        // Add as a new version
+        addDocumentVersion(
+            currentContent, 
+            description, 
+            currentVersion.outputType, 
+            currentVersion.grantType
+        );
+        
+        // View the newly created version
+        viewDocumentVersion(documentVersions.length - 1);
+    }
+    
+    // Make sure the save version button works
+    saveVersionBtn.addEventListener('click', saveCurrentVersion);
 
 }); // End of DOMContentLoaded

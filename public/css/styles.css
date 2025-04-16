@@ -1368,59 +1368,77 @@ code {
 
 /* Document Version History Styles */
 .version-history-container {
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 250px;
-    background-color: #f9f9f9;
-    border-right: 1px solid #e1e1e1;
+    width: 300px;
+    background-color: white;
+    border-right: 2px solid #4f46e5;
     overflow-y: auto;
-    z-index: 50;
-    transition: transform 0.3s ease;
+    z-index: 1000;
     display: flex;
     flex-direction: column;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-}
-
-.version-history-container.hidden {
-    display: none;
+    box-shadow: 3px 0 15px rgba(0,0,0,0.2);
 }
 
 .version-history-header {
     padding: 15px;
-    background-color: #f0f0f0;
-    border-bottom: 1px solid #e1e1e1;
+    background-color: #4f46e5;
+    color: white;
     font-weight: bold;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
+.version-history-header .close-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.2em;
+    cursor: pointer;
+    width: auto;
+    padding: 5px;
+}
+
 .version-history-list {
-    padding: 10px;
+    padding: 15px;
     flex-grow: 1;
     overflow-y: auto;
 }
 
+.version-controls {
+    padding: 15px;
+    background-color: #f3f4f6;
+    border-top: 1px solid #e1e1e1;
+}
+
+.version-controls .action-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
 .version-node {
-    padding: 10px;
-    margin-bottom: 8px;
-    background-color: #fff;
-    border: 1px solid #e1e1e1;
+    padding: 15px;
+    margin-bottom: 10px;
+    background-color: #f3f4f6;
+    border-left: 4px solid #4f46e5;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .version-node:hover {
-    background-color: #f0f8ff;
-    border-color: #a8d4ff;
+    background-color: #e0e7ff;
+    transform: translateX(5px);
 }
 
 .version-node.active {
-    background-color: #e6f3ff;
-    border-color: #4da3ff;
+    background-color: #e0e7ff;
+    border-left-color: #4338ca;
 }
 
 .version-timestamp {
@@ -1451,28 +1469,30 @@ code {
     position: absolute;
     left: 10px;
     top: 10px;
-    z-index: 10;
-    padding: 8px 12px;
-    background-color: #fff;
-    border: 1px solid #e1e1e1;
+    z-index: 100;
+    padding: 10px 15px;
+    background-color: #4f46e5;
+    color: white;
+    border: none;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.9em;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-size: 1em;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     display: flex;
     align-items: center;
-    gap: 5px;
-    color: var(--primary-color);
-    font-weight: 500;
+    gap: 8px;
+    font-weight: 600;
+    transition: all 0.2s ease;
 }
 
 .version-history-toggle:hover {
-    background-color: #f0f8ff;
-    border-color: var(--primary-color);
+    background-color: #3730a3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
 .version-history-toggle i {
-    font-size: 1em;
+    font-size: 1.1em;
 }
 
 .with-version-history #output-container {
@@ -1531,4 +1551,8 @@ code {
     .version-history-overlay.visible {
         display: block;
     }
+}
+
+.version-history-container.hidden {
+    display: none;
 } 
