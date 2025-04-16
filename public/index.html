@@ -65,6 +65,22 @@
                         </div>
                         <div id="output-container">
                             <div id="loading" class="hidden">Generating content...</div>
+                            <div class="version-history-toggle hidden" id="versionHistoryToggle">
+                                <i class="fas fa-history"></i> Version History
+                            </div>
+                            <div class="version-history-container hidden" id="versionHistoryContainer">
+                                <div class="version-history-header">
+                                    <span>Document History</span>
+                                    <button id="closeVersionHistory" class="close-btn"><i class="fas fa-times"></i></button>
+                                </div>
+                                <div class="version-history-list" id="versionHistoryList">
+                                    <!-- Version nodes will be added here dynamically -->
+                                </div>
+                                <div class="version-controls">
+                                    <button id="saveVersionBtn" class="action-btn"><i class="fas fa-save"></i> Save Version</button>
+                                </div>
+                            </div>
+                            <div class="version-history-overlay" id="versionHistoryOverlay"></div>
                             <div id="output-content"></div>
                             <div id="edit-content" class="hidden">
                                 <div class="document-form">

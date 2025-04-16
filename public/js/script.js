@@ -272,6 +272,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     downloadAsDocx(data.outputType, data.grantType || grantType);
                 });
                 outputActions.appendChild(downloadBtn);
+                
+                // Suggest Edits button
+                const suggestEditsBtn = document.createElement('button');
+                suggestEditsBtn.className = 'action-btn';
+                suggestEditsBtn.innerHTML = '<i class="fas fa-magic"></i> Suggest Edits';
+                suggestEditsBtn.addEventListener('click', function() {
+                    suggestDocumentEdits(outputContent.innerHTML, data.outputType);
+                });
+                outputActions.appendChild(suggestEditsBtn);
             } else {
                 // For other output types
                 const editBtn = document.createElement('button');
@@ -289,6 +298,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     downloadContent(data.outputType);
                 });
                 outputActions.appendChild(downloadBtn);
+                
+                // Suggest Edits button
+                const suggestEditsBtn = document.createElement('button');
+                suggestEditsBtn.className = 'action-btn';
+                suggestEditsBtn.innerHTML = '<i class="fas fa-magic"></i> Suggest Edits';
+                suggestEditsBtn.addEventListener('click', function() {
+                    suggestDocumentEdits(outputContent.innerHTML, data.outputType);
+                });
+                outputActions.appendChild(suggestEditsBtn);
             }
             
             // Clear selected documents after generation
@@ -2499,4 +2517,560 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '</tbody></table>';
         return html;
     }
-}); 
+
+    // Helper function to escape HTML content
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Function to suggest edits to document content
+    async function suggestDocumentEdits(documentHtml, outputType) {
+        try {
+            // Create loading indicator
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'loading-overlay';
+            loadingOverlay.innerHTML = '<div class="spinner"></div><p>Analyzing document for suggestions...</p>';
+            document.body.appendChild(loadingOverlay);
+            
+            // Send document to API for review
+            const response = await fetch('/api/review-document', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    documentHtml: documentHtml
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to review document');
+            }
+            
+            const data = await response.json();
+            
+            // Remove loading overlay
+            document.body.removeChild(loadingOverlay);
+            
+            // Display suggestions
+            displaySuggestions(data.suggestions, documentHtml, outputType);
+        } catch (error) {
+            console.error('Error:', error);
+            alert(`Error suggesting edits: ${error.message}`);
+            
+            // Remove loading overlay if it exists
+            const overlay = document.querySelector('.loading-overlay');
+            if (overlay) {
+                document.body.removeChild(overlay);
+            }
+        }
+    }
+    
+    // Function to display suggestions in a modal
+    function displaySuggestions(suggestions, documentHtml, outputType) {
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        
+        // If no suggestions, show message
+        if (!suggestions || suggestions.length === 0) {
+            modal.innerHTML = `
+                <div class="modal-content suggestions-modal">
+                    <div class="modal-header">
+                        <h2>Document Review</h2>
+                        <span class="close-suggestions-modal">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <div class="suggestions-container">
+                            <div class="no-suggestions">
+                                <i class="fas fa-check-circle"></i>
+                                <p>No issues found in the document. Everything looks good!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Create suggestions HTML
+            const suggestionsHtml = suggestions.map((suggestion, index) => `
+                <div class="suggestion-item" data-index="${index}">
+                    <div class="suggestion-header">
+                        <h3>Issue ${index + 1}</h3>
+                        <div class="suggestion-controls">
+                            <button class="accept-suggestion" data-index="${index}">
+                                <i class="fas fa-check"></i> Accept
+                            </button>
+                            <button class="reject-suggestion" data-index="${index}">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </div>
+                    </div>
+                    <div class="suggestion-problem">
+                        <strong>Problem:</strong>
+                        <p>${escapeHtml(suggestion.problem)}</p>
+                    </div>
+                    <div class="suggestion-reason">
+                        <strong>Reason:</strong>
+                        <p>${escapeHtml(suggestion.reason)}</p>
+                    </div>
+                    <div class="suggestion-correction">
+                        <strong>Suggestion:</strong>
+                        <p>${escapeHtml(suggestion.suggestion)}</p>
+                    </div>
+                </div>
+            `).join('');
+            
+            modal.innerHTML = `
+                <div class="modal-content suggestions-modal">
+                    <div class="modal-header">
+                        <h2>Document Review Suggestions</h2>
+                        <span class="close-suggestions-modal">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <div class="suggestions-container">
+                            ${suggestionsHtml}
+                        </div>
+                        <div class="suggestions-actions">
+                            <button id="acceptAllSuggestions" class="action-btn">
+                                <i class="fas fa-check-double"></i> Accept All
+                            </button>
+                            <button id="rejectAllSuggestions" class="action-btn secondary-btn">
+                                <i class="fas fa-times-circle"></i> Reject All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Add modal to body
+        document.body.appendChild(modal);
+        
+        // Make modal visible
+        setTimeout(() => {
+            modal.classList.add('visible');
+        }, 10);
+        
+        // Close modal when clicking on X
+        const closeBtn = modal.querySelector('.close-suggestions-modal');
+        closeBtn.addEventListener('click', () => {
+            modal.classList.remove('visible');
+            setTimeout(() => {
+                document.body.removeChild(modal);
+            }, 300);
+        });
+        
+        // Close modal when clicking outside content
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.classList.remove('visible');
+                setTimeout(() => {
+                    document.body.removeChild(modal);
+                }, 300);
+            }
+        });
+        
+        // If there are suggestions, add event listeners for accept/reject buttons
+        if (suggestions && suggestions.length > 0) {
+            // Store original document HTML
+            const originalHtml = documentHtml;
+            let currentHtml = originalHtml;
+            
+            // Accept single suggestion
+            const acceptButtons = modal.querySelectorAll('.accept-suggestion');
+            acceptButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const index = parseInt(button.getAttribute('data-index'));
+                    const suggestion = suggestions[index];
+                    
+                    // Apply this suggestion to the current HTML
+                    currentHtml = applySuggestion(currentHtml, suggestion);
+                    
+                    // Update the document with the new HTML
+                    outputContent.innerHTML = currentHtml;
+                    
+                    // Mark as accepted and disable buttons
+                    const suggestionItem = button.closest('.suggestion-item');
+                    suggestionItem.classList.add('accepted');
+                    suggestionItem.querySelector('.suggestion-controls').innerHTML = 
+                        '<span class="suggestion-status">✓ Applied</span>';
+                });
+            });
+            
+            // Reject single suggestion
+            const rejectButtons = modal.querySelectorAll('.reject-suggestion');
+            rejectButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Mark as rejected and disable buttons
+                    const suggestionItem = button.closest('.suggestion-item');
+                    suggestionItem.classList.add('rejected');
+                    suggestionItem.querySelector('.suggestion-controls').innerHTML = 
+                        '<span class="suggestion-status">✗ Rejected</span>';
+                });
+            });
+            
+            // Accept all suggestions
+            const acceptAllBtn = modal.querySelector('#acceptAllSuggestions');
+            acceptAllBtn.addEventListener('click', () => {
+                // Apply all suggestions
+                let updatedHtml = originalHtml;
+                suggestions.forEach(suggestion => {
+                    updatedHtml = applySuggestion(updatedHtml, suggestion);
+                });
+                
+                // Update the document with the new HTML
+                outputContent.innerHTML = updatedHtml;
+                
+                // Mark all as accepted
+                modal.querySelectorAll('.suggestion-item').forEach(item => {
+                    item.classList.add('accepted');
+                    item.querySelector('.suggestion-controls').innerHTML = 
+                        '<span class="suggestion-status">✓ Applied</span>';
+                });
+                
+                // Show success message
+                const actionsDiv = modal.querySelector('.suggestions-actions');
+                actionsDiv.innerHTML = '<div class="success-message">All suggestions applied successfully!</div>';
+            });
+            
+            // Reject all suggestions
+            const rejectAllBtn = modal.querySelector('#rejectAllSuggestions');
+            rejectAllBtn.addEventListener('click', () => {
+                // Mark all as rejected
+                modal.querySelectorAll('.suggestion-item').forEach(item => {
+                    item.classList.add('rejected');
+                    item.querySelector('.suggestion-controls').innerHTML = 
+                        '<span class="suggestion-status">✗ Rejected</span>';
+                });
+                
+                // Show message
+                const actionsDiv = modal.querySelector('.suggestions-actions');
+                actionsDiv.innerHTML = '<div class="neutral-message">All suggestions rejected.</div>';
+            });
+        }
+    }
+    
+    // Function to apply a suggestion to HTML content
+    function applySuggestion(html, suggestion) {
+        // Check if we have valid inputs
+        if (!html || !suggestion || !suggestion.problem || !suggestion.suggestion) {
+            console.error("Invalid inputs for applySuggestion:", {html: !!html, suggestion});
+            return html;
+        }
+        
+        try {
+            // Simple text replacement with safeguards to preserve HTML
+            // We do a direct string replacement but track the positions to avoid breaking HTML tags
+            const problemText = suggestion.problem;
+            const replacementText = suggestion.suggestion;
+            
+            // Helper function to find a string in text without breaking HTML tags
+            function safeReplace(html, search, replace) {
+                // Split the HTML into tag and text segments
+                let parts = html.split(/(<[^>]*>)/g);
+                
+                // Only replace text in non-tag parts
+                for (let i = 0; i < parts.length; i++) {
+                    // Skip tag parts (they start with < and end with >)
+                    if (parts[i].startsWith('<') && parts[i].endsWith('>')) {
+                        continue;
+                    }
+                    
+                    // Replace in text parts
+                    if (parts[i].includes(search)) {
+                        parts[i] = parts[i].replace(search, replace);
+                        return parts.join(''); // Return once we've made one replacement
+                    }
+                }
+                
+                // No exact match found, try case-insensitive if necessary
+                const searchRegex = new RegExp(escapeRegExp(search), 'i');
+                for (let i = 0; i < parts.length; i++) {
+                    if (parts[i].startsWith('<') && parts[i].endsWith('>')) {
+                        continue;
+                    }
+                    
+                    if (searchRegex.test(parts[i])) {
+                        parts[i] = parts[i].replace(searchRegex, replace);
+                        return parts.join('');
+                    }
+                }
+                
+                // If no replacement made, return original
+                return html;
+            }
+            
+            // Apply the replacement in a way that preserves HTML
+            const result = safeReplace(html, problemText, replacementText);
+            
+            // Log for debugging
+            console.log("Suggestion applied:", {
+                problem: problemText, 
+                replacement: replacementText,
+                changed: result !== html
+            });
+            
+            return result;
+        } catch (error) {
+            console.error("Error applying suggestion:", error);
+            return html; // Return original on error
+        }
+    }
+    
+    // Helper to escape special regex characters
+    function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Document Version History Implementation
+    // Store all versions of the document
+    let documentVersions = [];
+    let currentVersionIndex = -1;
+    
+    // Get version history elements
+    const versionHistoryToggle = document.getElementById('versionHistoryToggle');
+    const versionHistoryContainer = document.getElementById('versionHistoryContainer');
+    const versionHistoryList = document.getElementById('versionHistoryList');
+    const versionHistoryOverlay = document.getElementById('versionHistoryOverlay');
+    const closeVersionHistory = document.getElementById('closeVersionHistory');
+    const saveVersionBtn = document.getElementById('saveVersionBtn');
+    
+    // Initialize version history when a document is generated
+    function initializeVersionHistory(content, outputType, grantType) {
+        // Reset version history
+        documentVersions = [];
+        currentVersionIndex = -1;
+        versionHistoryList.innerHTML = '';
+        
+        // Add initial version
+        addDocumentVersion(content, 'Initial Version', outputType, grantType);
+        
+        // Make sure the version history toggle is visible
+        versionHistoryToggle.classList.remove('hidden');
+        versionHistoryToggle.style.display = 'block';
+    }
+    
+    // Add a new version to the history
+    function addDocumentVersion(content, description, outputType, grantType) {
+        const timestamp = new Date();
+        const version = {
+            content,
+            description,
+            timestamp,
+            outputType,
+            grantType
+        };
+        
+        // Add to versions array
+        documentVersions.push(version);
+        currentVersionIndex = documentVersions.length - 1;
+        
+        // Update UI
+        renderVersionHistory();
+    }
+    
+    // Render the version history list
+    function renderVersionHistory() {
+        versionHistoryList.innerHTML = '';
+        
+        documentVersions.forEach((version, index) => {
+            const versionNode = document.createElement('div');
+            versionNode.className = `version-node ${index === currentVersionIndex ? 'active' : ''}`;
+            versionNode.dataset.index = index;
+            
+            // Format timestamp
+            const timeFormatted = version.timestamp.toLocaleTimeString();
+            const dateFormatted = version.timestamp.toLocaleDateString();
+            
+            versionNode.innerHTML = `
+                <div class="version-title">
+                    Version ${index + 1}
+                    ${index === 0 ? '<span class="version-badge">Initial</span>' : ''}
+                    ${index === documentVersions.length - 1 && index !== 0 ? '<span class="version-badge">Latest</span>' : ''}
+                </div>
+                <div class="version-timestamp">
+                    ${dateFormatted} at ${timeFormatted}
+                </div>
+                <div class="version-description">${version.description}</div>
+            `;
+            
+            // Add click event to view this version
+            versionNode.addEventListener('click', () => {
+                viewDocumentVersion(index);
+            });
+            
+            versionHistoryList.appendChild(versionNode);
+        });
+    }
+    
+    // View a specific version of the document
+    function viewDocumentVersion(index) {
+        if (index < 0 || index >= documentVersions.length) return;
+        
+        // Update current index
+        currentVersionIndex = index;
+        
+        // Get the version
+        const version = documentVersions[index];
+        
+        // Update UI
+        outputContent.innerHTML = version.content;
+        
+        // Add revert button if not viewing the latest version
+        if (index < documentVersions.length - 1) {
+            const revertBtn = document.createElement('button');
+            revertBtn.className = 'action-btn';
+            revertBtn.innerHTML = '<i class="fas fa-undo"></i> Revert to this version';
+            revertBtn.addEventListener('click', () => {
+                revertToVersion(index);
+            });
+            
+            // Add the revert button to the top of the content
+            const revertContainer = document.createElement('div');
+            revertContainer.className = 'revert-container';
+            revertContainer.appendChild(revertBtn);
+            outputContent.insertBefore(revertContainer, outputContent.firstChild);
+        }
+        
+        // Update UI highlighting
+        const versionNodes = versionHistoryList.querySelectorAll('.version-node');
+        versionNodes.forEach(node => {
+            node.classList.toggle('active', parseInt(node.dataset.index) === index);
+        });
+    }
+    
+    // Revert to a previous version
+    function revertToVersion(index) {
+        if (index < 0 || index >= documentVersions.length) return;
+        
+        const confirmRevert = confirm('Are you sure you want to revert to this version? This will create a new version with the reverted content.');
+        if (!confirmRevert) return;
+        
+        const version = documentVersions[index];
+        addDocumentVersion(
+            version.content, 
+            `Reverted to Version ${index + 1}`, 
+            version.outputType, 
+            version.grantType
+        );
+        
+        // View the newly created version
+        viewDocumentVersion(documentVersions.length - 1);
+    }
+    
+    // Save current document as a new version
+    function saveCurrentVersion() {
+        // Get the current document content
+        const currentContent = outputContent.innerHTML;
+        
+        // Display a dialog to enter version description
+        const description = prompt('Enter a description for this version:', 'Updated version');
+        if (!description) return; // User cancelled
+        
+        // Get current document type
+        const currentVersion = documentVersions[currentVersionIndex];
+        
+        // Add as a new version
+        addDocumentVersion(
+            currentContent, 
+            description, 
+            currentVersion.outputType, 
+            currentVersion.grantType
+        );
+        
+        // View the newly created version
+        viewDocumentVersion(documentVersions.length - 1);
+    }
+    
+    // Event listeners for version history
+    versionHistoryToggle.addEventListener('click', () => {
+        console.log('Version history toggle clicked');
+        versionHistoryContainer.classList.remove('hidden');
+        versionHistoryOverlay.classList.add('visible');
+        document.getElementById('output-container').classList.add('with-version-history');
+        
+        // Force a redraw of the version history
+        renderVersionHistory();
+    });
+    
+    closeVersionHistory.addEventListener('click', () => {
+        console.log('Close version history clicked');
+        versionHistoryContainer.classList.add('hidden');
+        versionHistoryOverlay.classList.remove('visible');
+        document.getElementById('output-container').classList.remove('with-version-history');
+    });
+    
+    versionHistoryOverlay.addEventListener('click', () => {
+        closeVersionHistory.click();
+    });
+    
+    saveVersionBtn.addEventListener('click', saveCurrentVersion);
+    
+    // Hook into the existing document generation flow
+    const originalFormatOutput = formatOutput;
+    formatOutput = function(content, outputType) {
+        const formattedContent = originalFormatOutput(content, outputType);
+        
+        // Initialize version history after first generation
+        if (formattedContent && outputType) {
+            // Ensure this executes after the content is rendered
+            setTimeout(() => {
+                initializeVersionHistory(formattedContent, outputType, grantTypeSelect.value);
+                console.log('Version history initialized');
+            }, 500);
+        }
+        
+        return formattedContent;
+    };
+    
+    // Hook into the edit content save function
+    const originalSaveEditsEvent = saveEditsBtn.onclick;
+    saveEditsBtn.onclick = function(event) {
+        if (typeof originalSaveEditsEvent === 'function') {
+            originalSaveEditsEvent.call(this, event);
+        }
+        
+        // After saving edits, automatically create a new version
+        setTimeout(() => {
+            if (documentVersions.length > 0) {
+                const currentContent = outputContent.innerHTML;
+                addDocumentVersion(
+                    currentContent, 
+                    'Edited content', 
+                    documentVersions[currentVersionIndex].outputType, 
+                    documentVersions[currentVersionIndex].grantType
+                );
+                viewDocumentVersion(documentVersions.length - 1);
+            }
+        }, 500);
+    };
+    
+    // Also hook into suggestDocumentEdits to track changes
+    const originalApplySuggestion = applySuggestion;
+    applySuggestion = function(html, suggestion) {
+        const result = originalApplySuggestion(html, suggestion);
+        
+        // After applying an AI suggestion, create a new version
+        setTimeout(() => {
+            if (documentVersions.length > 0) {
+                const currentContent = outputContent.innerHTML;
+                addDocumentVersion(
+                    currentContent, 
+                    'Applied AI suggestion', 
+                    documentVersions[currentVersionIndex].outputType, 
+                    documentVersions[currentVersionIndex].grantType
+                );
+                viewDocumentVersion(documentVersions.length - 1);
+            }
+        }, 500);
+        
+        return result;
+    };
+
+}); // End of DOMContentLoaded

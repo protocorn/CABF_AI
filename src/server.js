@@ -988,6 +988,84 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
+// API endpoint for document review and suggestions
+app.post('/api/review-document', async (req, res) => {
+  try {
+    const { documentHtml } = req.body;
+    
+    if (!documentHtml) {
+      return res.status(400).json({ error: 'Document content is required' });
+    }
+    
+    // Configure the model - using Gemini 2.0 Flash
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    
+    // Create a prompt for document review
+    const prompt = `Review the following document content and identify any issues that need attention. 
+    Focus on:
+    1. Grammatical errors
+    2. Factual inaccuracies
+    3. Confusing or unclear language
+    4. Formatting issues
+    5. Any other problems you notice
+    
+    IMPORTANT INSTRUCTIONS:
+    - IGNORE all hashtags (#, ##, ###) and markdown-style formatting as these are intentional formatting elements
+    - Do NOT suggest changes to the document structure or heading format
+    - Only focus on actual content issues like grammar, factual errors, and clarity
+    - Do not be concerned with the number of hashtags or their placement
+    
+    For each issue, provide:
+    1. The problematic text
+    2. Why it's a problem
+    3. A suggested correction
+    
+    Format your response as a JSON array of objects with the following structure:
+    [
+      {
+        "problem": "The problematic text",
+        "reason": "Why it's a problem",
+        "suggestion": "Suggested correction"
+      }
+    ]
+    
+    If there are no issues, return an empty array.
+    
+    Here is the document content:
+    ${documentHtml}`;
+    
+    // Generate content with Gemini
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = response.text();
+    
+    // Extract the JSON array from the response
+    let suggestions = [];
+    try {
+      // Extract JSON if it's wrapped in code blocks or other text
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        suggestions = JSON.parse(jsonMatch[0]);
+      } else {
+        // If no JSON array found, try to parse the entire response
+        suggestions = JSON.parse(text);
+      }
+    } catch (error) {
+      console.error('Error parsing JSON from Gemini response:', error);
+      console.log('Raw response:', text);
+      return res.status(500).json({ 
+        error: 'Failed to parse suggestions', 
+        rawResponse: text 
+      });
+    }
+    
+    res.json({ suggestions });
+  } catch (error) {
+    console.error('Error in document review:', error);
+    res.status(500).json({ error: 'Internal server error during document review' });
+  }
+});
+
 // Helper function to get MIME type based on file extension
 function getMimeType(extension) {
   const mimeTypes = {

@@ -11,7 +11,7 @@ const pinecone = new Pinecone({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // The name of the index where CABF documents are stored
-const INDEX_NAME = 'cabf-docs';
+const INDEX_NAME = 'cafb';
 
 // Function to initialize Pinecone client and get the index
 async function getPineconeIndex() {
@@ -140,4 +140,4 @@ async function getContextFromDocuments(documentIds) {
 module.exports = {
   queryPinecone,
   getContextFromDocuments
-}; 
+};
