@@ -8,15 +8,26 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <!-- Add meta description for better SEO -->
+    <meta name="description" content="AI-powered document generator for creating professional content with advanced AI">
+    <!-- Add favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234361ee' d='M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M9.9,13.5A2.5,2.5 0 0,0 7.4,16A2.5,2.5 0 0,0 9.9,18.5A2.5,2.5 0 0,0 12.4,16A2.5,2.5 0 0,0 9.9,13.5M17.9,13.5A2.5,2.5 0 0,0 15.4,16A2.5,2.5 0 0,0 17.9,18.5A2.5,2.5 0 0,0 20.4,16A2.5,2.5 0 0,0 17.9,13.5Z'/%3E%3C/svg%3E">
 </head>
 <body>
     <div class="container">
-        <h1>AI Document Generator</h1>
+        <header class="app-header">
+            <h1><i class="fas fa-file-alt"></i> AI Document Generator</h1>
+            <p class="app-subtitle">Create professional documents instantly with AI assistance</p>
+        </header>
         
         <div class="tabs-container">
             <div class="tabs-header">
-                <button class="tab-button active" data-tab="generate">Generate Content</button>
-                <button class="tab-button" data-tab="search">Search Documents</button>
+                <button class="tab-button active" data-tab="generate">
+                    <i class="fas fa-pencil-alt"></i> Generate Content
+                </button>
+                <button class="tab-button" data-tab="search">
+                    <i class="fas fa-search"></i> Search Documents
+                </button>
             </div>
             
             <div class="tab-content">
@@ -24,50 +35,82 @@
                 <div class="tab-pane active" id="generate-tab">
                     <div class="card">
                         <div class="form-group">
-                            <label>Select Output Format</label>
-                            <select id="outputType">
-                                <option value="pdf">PDF</option>
-                                <option value="docx">DOCX</option>
-                                <option value="ppt">PowerPoint (PPT)</option>
-                                <option value="grant">Grant Proposal</option>
-                                <option value="x">Twitter Post</option>
-                                <option value="instagram">Instagram Post</option>
-                            </select>
+                            <label for="outputType">Select Output Format</label>
+                            <div class="select-wrapper">
+                                <select id="outputType">
+                                    <option value="pdf">PDF Document</option>
+                                    <option value="docx">Word Document (DOCX)</option>
+                                    <option value="ppt">PowerPoint Presentation</option>
+                                    <option value="grant">Grant Proposal</option>
+                                    <option value="x">Twitter/X Post</option>
+                                    <option value="instagram">Instagram Post</option>
+                                </select>
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
                         </div>
 
                         <div class="form-group hidden" id="grantTypeGroup">
-                            <label>Select Grant Type</label>
-                            <select id="grantType">
-                                <option value="rfp">Grant RFP Template</option>
-                                <option value="generic">Generic Grant Proposal Template</option>
-                                <option value="nonprofit">Non-profit Grant Proposal Template</option>
-                                <option value="research">Research Grant Proposal Template</option>
-                            </select>
+                            <label for="grantType">Select Grant Type</label>
+                            <div class="select-wrapper">
+                                <select id="grantType">
+                                    <option value="rfp">Grant RFP Template</option>
+                                    <option value="generic">Generic Grant Proposal Template</option>
+                                    <option value="nonprofit">Non-profit Grant Proposal Template</option>
+                                    <option value="research">Research Grant Proposal Template</option>
+                                </select>
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
                         </div>
 
                         <div class="form-group" id="pagesGroup">
-                            <label>How many pages/slides?</label>
-                            <input type="number" min="1" value="1" id="numPages">
+                            <label for="numPages">How many pages/slides?</label>
+                            <div class="number-input-wrapper">
+                                <button type="button" class="number-decrement">−</button>
+                                <input type="number" min="1" value="1" id="numPages">
+                                <button type="button" class="number-increment">+</button>
+                            </div>
                         </div>
 
                         <div class="form-group">
-                            <label>Enter Query for Generation</label>
-                            <textarea placeholder="What do you want to generate?" id="query"></textarea>
+                            <label for="query">Enter Query for Generation</label>
+                            <textarea placeholder="What document would you like to generate?" id="query"></textarea>
+                            <div class="input-info">Be specific about your document requirements for better results</div>
                         </div>
 
-                        <button id="generateBtn">Generate Document</button>
+                        <div class="form-group">
+                            <label for="contextDocuments">Additional Context Documents (optional)</label>
+                            <div class="file-upload-container">
+                                <input type="file" id="contextDocuments" multiple accept=".pdf,.docx,.doc,.txt">
+                                <div class="file-upload-button">
+                                    <i class="fas fa-file-upload"></i> Select Files
+                                </div>
+                                <p class="upload-helper-text">Drag and drop files or click to select</p>
+                            </div>
+                            <div id="uploadedFiles" class="uploaded-files-list"></div>
+                        </div>
+
+                        <button id="generateBtn">
+                            <i class="fas fa-magic"></i> Generate Document
+                        </button>
                     </div>
 
                     <div class="result-container">
-                        <h2>Generated Content</h2>
-                        <div class="output-actions" id="outputActions">
-                            <!-- Action buttons will appear here for grant proposals -->
-                        </div>
-                        <div id="output-container">
-                            <div id="loading" class="hidden">Generating content...</div>
+                        <div class="result-header">
+                            <h2><i class="fas fa-file-alt"></i> Generated Content</h2>
                             <div class="version-history-toggle" id="versionHistoryToggle">
                                 <i class="fas fa-history"></i> Version History
                             </div>
+                        </div>
+                        
+                        <div class="output-actions" id="outputActions">
+                            <!-- Action buttons will appear here for grant proposals -->
+                        </div>
+                        
+                        <div id="output-container">
+                            <div id="loading" class="hidden">
+                                <span class="spinner"></span> Generating content...
+                            </div>
+                            
                             <div class="version-history-container hidden" id="versionHistoryContainer">
                                 <div class="version-history-header">
                                     <span>Document History</span>
@@ -81,7 +124,9 @@
                                 </div>
                             </div>
                             <div class="version-history-overlay" id="versionHistoryOverlay"></div>
+                            
                             <div id="output-content"></div>
+                            
                             <div id="edit-content" class="hidden">
                                 <div class="document-form">
                                     <div class="form-header">
@@ -104,18 +149,40 @@
                 <div class="tab-pane" id="search-tab">
                     <div class="card">
                         <div class="form-group">
-                            <label>Search Capital Area Food Bank Documents</label>
-                            <textarea placeholder="Enter your search query..." id="searchQuery"></textarea>
+                            <label for="searchQuery">Search Capital Area Food Bank Documents</label>
+                            <div class="search-input-wrapper">
+                                <i class="fas fa-search search-icon"></i>
+                                <textarea placeholder="Enter your search query..." id="searchQuery"></textarea>
+                            </div>
                         </div>
-                        <button id="searchBtn">Search Documents</button>
+                        <button id="searchBtn">
+                            <i class="fas fa-search"></i> Search Documents
+                        </button>
                     </div>
                     
                     <div class="result-container">
-                        <h2>Relevant Documents</h2>
-                        <div id="search-loading" class="hidden">Searching documents...</div>
+                        <div class="result-header">
+                            <h2><i class="fas fa-file-search"></i> Relevant Documents</h2>
+                            <div class="search-filter">
+                                <label for="sortResults" class="filter-label">Sort by:</label>
+                                <select id="sortResults">
+                                    <option value="relevance">Relevance</option>
+                                    <option value="date">Date</option>
+                                    <option value="title">Title</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="search-loading" class="hidden">
+                            <span class="spinner"></span> Searching documents...
+                        </div>
+                        
                         <div id="search-results"></div>
+                        
                         <div class="search-actions hidden" id="searchActions">
-                            <button id="useSelectedBtn" class="action-btn"><i class="fas fa-file-import"></i> Use Selected Documents for Generation</button>
+                            <button id="useSelectedBtn" class="action-btn">
+                                <i class="fas fa-file-import"></i> Use Selected Documents for Generation
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -307,5 +374,6 @@
     </div>
 
     <script src="js/script.js"></script>
+    <script src="js/docx-loader.js"></script>
 </body>
 </html> 

@@ -11,6 +11,126 @@ document.addEventListener('DOMContentLoaded', function() {
     const loading = document.getElementById('loading');
     const outputActions = document.getElementById('outputActions');
     
+    // Get document upload elements
+    const contextDocumentsInput = document.getElementById('contextDocuments');
+    const uploadedFilesContainer = document.getElementById('uploadedFiles');
+    
+    // Array to store uploaded files and their content
+    let uploadedDocuments = [];
+    
+    // Handle file uploads
+    contextDocumentsInput.addEventListener('change', function(event) {
+        const files = event.target.files;
+        
+        if (files.length > 0) {
+            handleFileUploads(files);
+        }
+    });
+    
+    // Function to handle file uploads
+    async function handleFileUploads(files) {
+        for (const file of files) {
+            // Check file size (limit to 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert(`File ${file.name} is too large. Maximum file size is 5MB.`);
+                continue;
+            }
+            
+            // Add file to the list
+            const fileId = Date.now() + Math.random().toString(36).substr(2, 9);
+            const fileItem = document.createElement('div');
+            fileItem.className = 'uploaded-file-item';
+            fileItem.id = `file-${fileId}`;
+            
+            fileItem.innerHTML = `
+                <div class="uploaded-file-info">
+                    <i class="fas fa-file uploaded-file-icon"></i>
+                    <span class="uploaded-file-name">${file.name}</span>
+                    <span class="uploaded-file-size">(${formatFileSize(file.size)})</span>
+                </div>
+                <button class="uploaded-file-remove" data-file-id="${fileId}">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            uploadedFilesContainer.appendChild(fileItem);
+            
+            // Add event listener for remove button
+            const removeButton = fileItem.querySelector('.uploaded-file-remove');
+            removeButton.addEventListener('click', function() {
+                const fileId = this.getAttribute('data-file-id');
+                removeUploadedFile(fileId);
+            });
+            
+            try {
+                // Read file content
+                const content = await readFileContent(file);
+                
+                // Store file data
+                uploadedDocuments.push({
+                    id: fileId,
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    content: content
+                });
+            } catch (error) {
+                console.error('Error reading file:', error);
+                
+                // Show error in the UI
+                const fileItemElement = document.getElementById(`file-${fileId}`);
+                if (fileItemElement) {
+                    fileItemElement.classList.add('error');
+                    fileItemElement.querySelector('.uploaded-file-name').textContent = `${file.name} (Error reading file)`;
+                }
+            }
+        }
+    }
+    
+    // Function to read file content
+    function readFileContent(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = function(event) {
+                resolve(event.target.result);
+            };
+            
+            reader.onerror = function(error) {
+                reject(error);
+            };
+            
+            // Read file as text for text-based files
+            if (file.type.match('text.*') || 
+                file.type === 'application/json' || 
+                file.type === 'application/xml') {
+                reader.readAsText(file);
+            } else {
+                // Read as base64 for other file types
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    
+    // Function to remove an uploaded file
+    function removeUploadedFile(fileId) {
+        // Remove from DOM
+        const fileElement = document.getElementById(`file-${fileId}`);
+        if (fileElement) {
+            fileElement.remove();
+        }
+        
+        // Remove from array
+        uploadedDocuments = uploadedDocuments.filter(doc => doc.id !== fileId);
+    }
+    
+    // Helper function to format file size
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' bytes';
+        else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    
     // Get edit elements
     const outputContentDiv = document.getElementById('output-content');
     const editContentDiv = document.getElementById('edit-content');
@@ -206,115 +326,130 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle form submission
     generateBtn.addEventListener('click', async () => {
-        // Get form values
         const query = queryInput.value;
         const outputType = outputTypeSelect.value;
-        const numPages = numPagesInput.value;
-        const grantType = grantTypeSelect.value;
-
-        // Validate form
+        
         if (!query) {
             alert('Please enter a query for generation');
             return;
         }
-
+        
         try {
             // Show loading indicator
             loading.classList.remove('hidden');
+            loading.textContent = uploadedDocuments.length > 0 
+                ? 'Generating content with your uploaded documents...' 
+                : 'Generating content...';
             outputContent.innerHTML = '';
             outputActions.innerHTML = '';
             
-            // Determine which API endpoint to use based on whether documents are selected
-            const endpoint = selectedDocuments.length > 0 ? '/api/generate-with-context' : '/api/generate';
+            // Prepare request data
+            const data = {
+                query,
+                outputType,
+                numPages: numPagesInput.value,
+                grantType: outputType === 'grant' ? grantTypeSelect.value : null,
+            };
             
-            // Call API to generate document
+            // Add uploaded documents if any
+            if (uploadedDocuments.length > 0) {
+                console.log(`Including ${uploadedDocuments.length} document(s) as context`);
+                data.additionalContext = uploadedDocuments.map(doc => ({
+                    name: doc.name,
+                    content: doc.content,
+                    type: doc.type
+                }));
+            }
+            
+            // Determine which endpoint to use
+            const endpoint = uploadedDocuments.length > 0 || selectedDocuments.length > 0 
+                ? '/api/generate-with-context' 
+                : '/api/generate';
+            
+            // Add selected document IDs if available
+            if (selectedDocuments.length > 0) {
+                console.log(`Including ${selectedDocuments.length} selected document(s) as context`);
+                data.selectedDocumentIds = selectedDocuments.map(doc => doc.id);
+            }
+            
+            // Call API to generate content
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    query,
-                    outputType,
-                    grantType: outputType === 'grant' ? grantType : null,
-                    numPages: outputType === 'grant' ? 0 : numPages,
-                    selectedDocumentIds: selectedDocuments.length > 0 
-                        ? selectedDocuments.map(doc => doc.id) 
-                        : undefined
-                })
+                body: JSON.stringify(data)
             });
-
+            
             if (!response.ok) {
-                throw new Error('Failed to generate document');
+                throw new Error('Failed to generate content');
             }
-
-            const data = await response.json();
             
-            // Format and display the generated content
-            formatOutput(data.content, data.outputType);
+            const result = await response.json();
+            console.log('Server response:', result);
             
-            // Add action buttons
+            // Check if content is present in the response
+            if (!result.content) {
+                console.error('Content is missing in server response:', result);
+                throw new Error('Server returned no content');
+            }
+            
+            // Add context usage notification if context was used
+            if (result.usedContext) {
+                const contextNotice = document.createElement('div');
+                contextNotice.className = 'context-notice';
+                contextNotice.innerHTML = `
+                    <i class="fas fa-info-circle"></i>
+                    This document was generated using your provided context documents
+                `;
+                outputContent.parentElement.insertBefore(contextNotice, outputContent);
+            }
+            
+            // Format the output based on the type
+            const formattedContent = formatOutput(result.content, outputType);
+            outputContent.innerHTML = formattedContent;
+            
+            // Set up the actions for grant proposals
             if (outputType === 'grant') {
-                // Edit button
-                const editBtn = document.createElement('button');
-                editBtn.className = 'action-btn';
-                editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Content';
-                editBtn.addEventListener('click', function() {
-                    editContent(grantType);
-                });
-                outputActions.appendChild(editBtn);
+                setupGrantActions(result.grantType);
                 
-                // Download button
-                const downloadBtn = document.createElement('button');
-                downloadBtn.className = 'action-btn';
-                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download as DOCX';
-                downloadBtn.addEventListener('click', function() {
-                    downloadAsDocx(data.outputType, data.grantType || grantType);
-                });
-                outputActions.appendChild(downloadBtn);
-                
-                // Suggest Edits button
-                const suggestEditsBtn = document.createElement('button');
-                suggestEditsBtn.className = 'action-btn';
-                suggestEditsBtn.innerHTML = '<i class="fas fa-magic"></i> Suggest Edits';
-                suggestEditsBtn.addEventListener('click', function() {
-                    suggestDocumentEdits(outputContent.innerHTML, data.outputType);
-                });
-                outputActions.appendChild(suggestEditsBtn);
+                // Initialize version history
+                initializeVersionHistory(result.content, outputType, result.grantType);
             } else {
-                // For other output types
-                const editBtn = document.createElement('button');
-                editBtn.className = 'action-btn';
-                editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Content';
-                editBtn.addEventListener('click', function() {
-                    editContent();
-                });
-                outputActions.appendChild(editBtn);
+                // Add download button for other document types
+                outputActions.innerHTML = `
+                    <button id="downloadBtn" class="action-btn">
+                        <i class="fas fa-download"></i> Download as ${outputType.toUpperCase()}
+                    </button>
+                    <button id="editBtn" class="action-btn">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button id="suggestEditsBtn" class="action-btn">
+                        <i class="fas fa-magic"></i> Suggest Improvements
+                    </button>
+                `;
                 
-                const downloadBtn = document.createElement('button');
-                downloadBtn.className = 'action-btn';
-                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
-                downloadBtn.addEventListener('click', function() {
-                    downloadContent(data.outputType);
+                // Add event listener for download button
+                document.getElementById('downloadBtn').addEventListener('click', () => {
+                    downloadContent(outputType);
                 });
-                outputActions.appendChild(downloadBtn);
                 
-                // Suggest Edits button
-                const suggestEditsBtn = document.createElement('button');
-                suggestEditsBtn.className = 'action-btn';
-                suggestEditsBtn.innerHTML = '<i class="fas fa-magic"></i> Suggest Edits';
-                suggestEditsBtn.addEventListener('click', function() {
-                    suggestDocumentEdits(outputContent.innerHTML, data.outputType);
+                // Add event listener for edit button
+                document.getElementById('editBtn').addEventListener('click', () => {
+                    editContent(null);
                 });
-                outputActions.appendChild(suggestEditsBtn);
+                
+                // Add event listener for suggest edits button
+                document.getElementById('suggestEditsBtn').addEventListener('click', async () => {
+                    await suggestDocumentEdits(outputContent.innerHTML, outputType);
+                });
+                
+                // Initialize version history
+                initializeVersionHistory(result.content, outputType, null);
             }
             
-            // Clear selected documents after generation
-            const notification = document.querySelector('.selected-docs-notification');
-            if (notification) {
-                notification.remove();
-            }
-            selectedDocuments = [];
+            // Set up text selection handling
+            setupTextSelectionHandler();
         } catch (error) {
             console.error('Error:', error);
             outputContent.innerHTML = `<div class="error">Error generating document: ${error.message}</div>`;
@@ -1954,6 +2089,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to format the output based on document type
     function formatOutput(content, outputType) {
+        if (!content) {
+            console.error('Content is undefined or empty in formatOutput');
+            return '<div class="error">Error: Generated content is undefined or empty</div>';
+        }
+        
         let formattedContent = '';
 
         if (outputType === 'pdf' || outputType === 'docx' || outputType === 'grant') {
@@ -2061,10 +2201,8 @@ document.addEventListener('DOMContentLoaded', function() {
             formattedContent = content.replace(/\n/g, '<br>');
         }
 
-        outputContent.innerHTML = formattedContent;
-        
-        // Set up the text selection handler
-        setupTextSelectionHandler();
+        // Return the formatted content instead of setting it directly
+        return formattedContent;
     }
     
     // Function to handle text selection in the document
@@ -3130,4 +3268,336 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make sure the save version button works
     saveVersionBtn.addEventListener('click', saveCurrentVersion);
 
+    // Function to set up action buttons for grant proposals
+    function setupGrantActions(grantType) {
+        // Clear existing buttons
+        outputActions.innerHTML = '';
+        
+        // Add edit button
+        const editBtn = document.createElement('button');
+        editBtn.className = 'action-btn';
+        editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Content';
+        editBtn.addEventListener('click', function() {
+            editContent(grantType);
+        });
+        outputActions.appendChild(editBtn);
+        
+        // Add download button
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'action-btn';
+        downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download as DOCX';
+        downloadBtn.addEventListener('click', function() {
+            downloadAsDocx('grant', grantType);
+        });
+        outputActions.appendChild(downloadBtn);
+        
+        // Add suggest improvements button
+        const suggestEditsBtn = document.createElement('button');
+        suggestEditsBtn.className = 'action-btn';
+        suggestEditsBtn.innerHTML = '<i class="fas fa-magic"></i> Suggest Improvements';
+        suggestEditsBtn.addEventListener('click', function() {
+            suggestDocumentEdits(outputContent.innerHTML, 'grant');
+        });
+        outputActions.appendChild(suggestEditsBtn);
+    }
+
+    // Initialize number input controls
+    document.addEventListener('DOMContentLoaded', function() {
+        // Number input controls
+        const numberInputWrapper = document.querySelector('.number-input-wrapper');
+        if (numberInputWrapper) {
+            const input = numberInputWrapper.querySelector('input');
+            const decrementBtn = numberInputWrapper.querySelector('.number-decrement');
+            const incrementBtn = numberInputWrapper.querySelector('.number-increment');
+            
+            decrementBtn.addEventListener('click', function() {
+                let value = parseInt(input.value);
+                if (value > parseInt(input.min)) {
+                    input.value = value - 1;
+                    // Trigger change event
+                    input.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            incrementBtn.addEventListener('click', function() {
+                let value = parseInt(input.value);
+                input.value = value + 1;
+                // Trigger change event
+                input.dispatchEvent(new Event('change'));
+            });
+            
+            // Ensure input stays within limits
+            input.addEventListener('change', function() {
+                let value = parseInt(input.value);
+                let min = parseInt(input.min);
+                
+                if (isNaN(value) || value < min) {
+                    input.value = min;
+                }
+            });
+        }
+        
+        // Sort by dropdown functionality
+        const sortResults = document.getElementById('sortResults');
+        if (sortResults) {
+            sortResults.addEventListener('change', function() {
+                // If we have results, sort them
+                const searchResults = document.getElementById('search-results');
+                if (searchResults && searchResults.children.length > 0) {
+                    sortDocuments(this.value);
+                }
+            });
+        }
+        
+        // Enhance file upload with drag and drop
+        const fileUploadContainer = document.querySelector('.file-upload-container');
+        if (fileUploadContainer) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                fileUploadContainer.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                fileUploadContainer.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                fileUploadContainer.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                fileUploadContainer.classList.add('highlight');
+            }
+            
+            function unhighlight() {
+                fileUploadContainer.classList.remove('highlight');
+            }
+            
+            fileUploadContainer.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                const fileInput = document.getElementById('contextDocuments');
+                
+                if (fileInput.files && fileInput.files.length) {
+                    // Create a new FileList
+                    const dataTransfer = new DataTransfer();
+                    
+                    // Add existing files
+                    Array.from(fileInput.files).forEach(file => {
+                        dataTransfer.items.add(file);
+                    });
+                    
+                    // Add new files
+                    Array.from(files).forEach(file => {
+                        dataTransfer.items.add(file);
+                    });
+                    
+                    fileInput.files = dataTransfer.files;
+                } else {
+                    fileInput.files = files;
+                }
+                
+                // Trigger change event to update the UI
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+
+    // Function to sort documents
+    function sortDocuments(sortBy) {
+        const searchResults = document.getElementById('search-results');
+        const items = Array.from(searchResults.getElementsByClassName('document-item'));
+        
+        items.sort((a, b) => {
+            if (sortBy === 'relevance') {
+                const relevanceA = parseFloat(a.querySelector('.document-relevance').textContent.replace('%', ''));
+                const relevanceB = parseFloat(b.querySelector('.document-relevance').textContent.replace('%', ''));
+                return relevanceB - relevanceA; // Higher relevance first
+            } else if (sortBy === 'title') {
+                const titleA = a.querySelector('.document-info h3').textContent.toLowerCase();
+                const titleB = b.querySelector('.document-info h3').textContent.toLowerCase();
+                return titleA.localeCompare(titleB);
+            } else if (sortBy === 'date') {
+                // This assumes there's a data-date attribute or similar
+                // If there's no actual date, we could just use the DOM order
+                return items.indexOf(a) - items.indexOf(b);
+            }
+        });
+        
+        // Remove all current items
+        while (searchResults.firstChild) {
+            searchResults.removeChild(searchResults.firstChild);
+        }
+        
+        // Add sorted items
+        items.forEach(item => {
+            searchResults.appendChild(item);
+        });
+    }
+
+    // Add custom styling for file upload
+    const fileInput = document.getElementById('contextDocuments');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            updateFileList(this.files);
+        });
+    }
+
+    // Add "selected" class to document items when clicked
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.closest('.document-item')) {
+            const item = e.target.closest('.document-item');
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                // Trigger change event
+                checkbox.dispatchEvent(new Event('change'));
+            }
+            
+            // Toggle selected class
+            if (checkbox.checked) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+        }
+    });
+
 }); // End of DOMContentLoaded
+
+// Toast notification system
+function showToast(message, type = 'default', duration = 3000) {
+    // Remove any existing toasts
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${type}`;
+    
+    // Add icon based on type
+    let icon = 'info-circle';
+    if (type === 'success') {
+        icon = 'check-circle';
+    } else if (type === 'error') {
+        icon = 'exclamation-circle';
+    } else if (type === 'warning') {
+        icon = 'exclamation-triangle';
+    }
+    
+    toast.innerHTML = `
+        <div class="icon"><i class="fas fa-${icon}"></i></div>
+        <div class="message">${message}</div>
+    `;
+    
+    // Append to body
+    document.body.appendChild(toast);
+    
+    // Show toast (after tiny delay to ensure CSS transition works)
+    setTimeout(() => {
+        toast.classList.add('visible');
+    }, 10);
+    
+    // Hide toast after duration
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        
+        // Remove from DOM after transition
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, duration);
+}
+
+// Hook up toast notifications to important actions
+document.addEventListener('DOMContentLoaded', function() {
+    // For generate button
+    const generateBtn = document.getElementById('generateBtn');
+    if (generateBtn) {
+        const originalOnClick = generateBtn.onclick;
+        generateBtn.onclick = function(e) {
+            if (document.getElementById('query').value.trim() === '') {
+                showToast('Please enter a query for generation', 'error');
+                return;
+            }
+            
+            // Show generating toast
+            showToast('Generating your document...', 'default', 10000);
+            
+            // Call original handler
+            if (typeof originalOnClick === 'function') {
+                originalOnClick.call(this, e);
+            }
+        };
+    }
+    
+    // For search button
+    const searchBtn = document.getElementById('searchBtn');
+    if (searchBtn) {
+        const originalOnClick = searchBtn.onclick;
+        searchBtn.onclick = function(e) {
+            if (document.getElementById('searchQuery').value.trim() === '') {
+                showToast('Please enter a search query', 'error');
+                return;
+            }
+            
+            // Show searching toast
+            showToast('Searching documents...', 'default', 10000);
+            
+            // Call original handler
+            if (typeof originalOnClick === 'function') {
+                originalOnClick.call(this, e);
+            }
+        };
+    }
+    
+    // For file uploads
+    const fileInput = document.getElementById('contextDocuments');
+    if (fileInput) {
+        const originalOnChange = fileInput.onchange;
+        fileInput.onchange = function(e) {
+            // Call original handler first
+            if (typeof originalOnChange === 'function') {
+                originalOnChange.call(this, e);
+            }
+            
+            if (this.files.length > 0) {
+                const fileCount = this.files.length;
+                const fileText = fileCount === 1 ? '1 file' : `${fileCount} files`;
+                showToast(`${fileText} selected for additional context`, 'success');
+            }
+        };
+    }
+});
+
+// Add animation classes to elements
+document.addEventListener('DOMContentLoaded', function() {
+    // Add slide-in animation to cards
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        setTimeout(() => {
+            card.classList.add('slide-in');
+            card.style.opacity = '1';
+        }, index * 100); // Stagger the animations
+    });
+    
+    // Add fade-in animation to result containers
+    const resultContainers = document.querySelectorAll('.result-container');
+    resultContainers.forEach((container) => {
+        container.style.opacity = '0';
+        setTimeout(() => {
+            container.classList.add('fade-in');
+            container.style.opacity = '1';
+        }, 200);
+    });
+});

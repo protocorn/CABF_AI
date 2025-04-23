@@ -7,6 +7,9 @@ const fs = require('fs');
 require('dotenv').config();
 // Import Pinecone module
 const { queryPinecone, getContextFromDocuments } = require('./pinecone');
+// Import document parsing libraries
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,7 +23,8 @@ const genAI = new GoogleGenerativeAI(API_KEY || 'YOUR_API_KEY_HERE');
 
 // Middleware
 app.use(express.static(path.join(__dirname, '../public')));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Configure templates directory for Carbone
 const templatesDir = path.join(__dirname, '../templates');
@@ -108,33 +112,171 @@ app.post('/api/search-documents', async (req, res) => {
   }
 });
 
+// Function to truncate text to a reasonable size for the context window
+function truncateText(text, maxLength = 100000) {
+  if (!text || text.length <= maxLength) {
+    return text;
+  }
+  
+  // If text is too large, take the beginning and end portions
+  const halfLength = Math.floor(maxLength / 2);
+  const beginning = text.substring(0, halfLength);
+  const ending = text.substring(text.length - halfLength);
+  
+  return beginning + '\n\n[...document content truncated due to length...]\n\n' + ending;
+}
+
+// Function to parse document content based on type and base64 data
+async function parseDocumentContent(content, fileType, fileName) {
+  try {
+    // Handle different file types
+    if (content.startsWith('data:')) {
+      console.log(`Parsing document: ${fileName}, type: ${fileType}`);
+      
+      try {
+        // Extract base64 content
+        const base64Content = content.split(',')[1];
+        if (!base64Content) {
+          console.error('Invalid base64 data format');
+          return '[Error: Invalid file format]';
+        }
+        
+        const buffer = Buffer.from(base64Content, 'base64');
+        
+        // Process based on file type
+        if (fileType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+          // Parse PDF
+          try {
+            console.log(`Parsing PDF: ${fileName}`);
+            const pdfData = await pdfParse(buffer);
+            
+            if (pdfData && pdfData.text) {
+              console.log(`Successfully extracted ${pdfData.text.length} characters from PDF`);
+              return truncateText(pdfData.text);
+            } else {
+              console.error('PDF parsing returned empty text');
+              return '[PDF parsing returned empty text]';
+            }
+          } catch (pdfError) {
+            console.error('Error parsing PDF:', pdfError);
+            return '[Error parsing PDF content]';
+          }
+        } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                  fileName.toLowerCase().endsWith('.docx')) {
+          // Parse DOCX
+          try {
+            console.log(`Parsing DOCX: ${fileName}`);
+            const result = await mammoth.extractRawText({ buffer });
+            
+            if (result && result.value) {
+              console.log(`Successfully extracted ${result.value.length} characters from DOCX`);
+              return truncateText(result.value);
+            } else {
+              console.error('DOCX parsing returned empty text');
+              return '[DOCX parsing returned empty text]';
+            }
+          } catch (docxError) {
+            console.error('Error parsing DOCX:', docxError);
+            return '[Error parsing DOCX content]';
+          }
+        } else if (fileType === 'text/plain' || fileName.toLowerCase().endsWith('.txt')) {
+          // Parse text file
+          try {
+            console.log(`Parsing text file: ${fileName}`);
+            const text = buffer.toString('utf-8');
+            console.log(`Successfully extracted ${text.length} characters from text file`);
+            return truncateText(text);
+          } catch (textError) {
+            console.error('Error parsing text file:', textError);
+            return '[Error parsing text file]';
+          }
+        } else {
+          // For other binary formats, we can't extract text
+          console.log(`Unsupported file type: ${fileType || 'unknown'}`);
+          return `[Unsupported file format: ${fileType || 'unknown'}]`;
+        }
+      } catch (parseError) {
+        console.error('Error during file parsing:', parseError);
+        return '[Error during file parsing]';
+      }
+    } else {
+      // Already text content
+      console.log(`Processing text content, length: ${content.length} characters`);
+      return truncateText(content);
+    }
+  } catch (error) {
+    console.error('Error parsing document:', error);
+    return '[Error processing document content]';
+  }
+}
+
 // API endpoint for document generation with Pinecone context
 app.post('/api/generate-with-context', async (req, res) => {
   try {
-    const { query, outputType, numPages, grantType, selectedDocumentIds } = req.body;
+    const { query, outputType, numPages, grantType, selectedDocumentIds, additionalContext } = req.body;
     
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
     }
     
-    // Get context from selected documents if available
+    console.log(`Generating with context - Query: "${query}", Output type: ${outputType}, Grant type: ${grantType || 'none'}`);
+    if (additionalContext) {
+      console.log(`Additional context documents: ${additionalContext.length}`);
+    }
+    
+    // Initialize context string
     let context = '';
+    let hasContext = false;
+    
+    // Get context from selected documents if available
     if (selectedDocumentIds && selectedDocumentIds.length > 0) {
       try {
         // Fetch actual context from the documents
-        context = await getContextFromDocuments(selectedDocumentIds);
+        context += await getContextFromDocuments(selectedDocumentIds);
         console.log('Successfully retrieved context from Pinecone');
+        hasContext = true;
       } catch (error) {
         console.error('Error fetching document context:', error);
         // Fallback to mock data if fetching fails
         console.log('Using fallback context data');
-        context = 'Using context from Capital Area Food Bank documents:\n\n';
+        context += 'Using context from Capital Area Food Bank documents:\n\n';
         context += 'DOCUMENT 1: Capital Area Food Bank Overview\n';
         context += 'The Capital Area Food Bank has been serving the DC metro area for over 40 years. Our mission is to address hunger today and build healthier futures tomorrow for residents struggling with food insecurity.\n\n';
         context += 'DOCUMENT 2: CABF Community Impact Report 2023\n';
         context += 'In 2023, the Capital Area Food Bank distributed over 45 million meals to families facing food insecurity across Washington DC, Maryland, and Virginia. Our programs reached more than 400,000 individuals.\n\n';
         context += 'DOCUMENT 3: Food Insecurity in the DMV Region\n';
         context += 'Food insecurity affects over 400,000 residents in the DC, Maryland, and Virginia region, with particularly high rates among children and seniors. Economic challenges from inflation have increased need by 30%.\n\n';
+        hasContext = true;
+      }
+    }
+    
+    // Add context from user-uploaded documents if available
+    if (additionalContext && additionalContext.length > 0) {
+      if (context) {
+        context += '\n\nADDITIONAL USER-PROVIDED CONTEXT:\n\n';
+      } else {
+        context += 'USER-PROVIDED CONTEXT:\n\n';
+      }
+      
+      // Process each uploaded document
+      for (let i = 0; i < additionalContext.length; i++) {
+        const doc = additionalContext[i];
+        
+        // Add document header
+        context += `DOCUMENT ${i+1}: ${doc.name}\n`;
+        
+        try {
+          // Parse document content
+          const parsedContent = await parseDocumentContent(doc.content, doc.type, doc.name);
+          
+          // Add the parsed content
+          context += `${parsedContent}\n\n`;
+          hasContext = true;
+          console.log(`Successfully parsed document ${i+1}: ${doc.name}`);
+        } catch (error) {
+          console.error(`Error processing document ${doc.name}:`, error);
+          context += `[Error processing document content]\n\n`;
+        }
       }
     }
     
@@ -145,9 +287,25 @@ app.post('/api/generate-with-context', async (req, res) => {
     let prompt = '';
     
     // Add context to the prompt if available
-    if (context) {
-      prompt += `${context}\n\n`;
-      prompt += `Use the information above as context to create a detailed, accurate document about ${query}.\n\n`;
+    if (hasContext && context.trim()) {
+      // Log context length to help with debugging
+      console.log(`Context length: ${context.length} characters`);
+
+      console.log(context);
+      
+      prompt = `You are a helpful AI assistant creating a document based on user request.
+
+IMPORTANT CONTEXT INFORMATION:
+${context}
+
+USER REQUEST:
+The user has asked you to create a ${outputType === 'grant' ? `${grantType} grant proposal` : outputType} document about: "${query}"
+
+You MUST incorporate the information from the context above into the document you generate. Use specific details, facts, and information from the provided context where relevant.
+
+`;
+    } else {
+      console.log('No context available, generating without additional context');
     }
     
     if (outputType === 'grant') {
@@ -453,17 +611,39 @@ app.post('/api/generate-with-context', async (req, res) => {
     }
     
     // Generate content with Gemini
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    
-    res.json({
-      content: text,
-      outputType,
-      grantType: outputType === 'grant' ? grantType : null
-    });
+    try {
+      // Log the beginning of the prompt to verify context is included
+      console.log("Prompt beginning (first 500 chars):", prompt.substring(0, 500));
+      
+      const result = await model.generateContent(prompt);
+      
+      if (!result || !result.response) {
+        console.error('Empty response from Gemini API');
+        return res.status(500).json({ error: 'Empty response from AI model' });
+      }
+      
+      const text = result.response.text();
+      
+      if (!text) {
+        console.error('Empty text in Gemini API response');
+        return res.status(500).json({ error: 'AI model returned empty content' });
+      }
+      
+      console.log(`Successfully generated content (${text.length} characters)`);
+      
+      res.json({
+        content: text,
+        outputType,
+        grantType: outputType === 'grant' ? grantType : null,
+        usedContext: hasContext
+      });
+    } catch (modelError) {
+      console.error('Error from Gemini API:', modelError);
+      return res.status(500).json({ error: 'Error generating content from AI model', details: modelError.message });
+    }
   } catch (error) {
     console.error('Error in generation endpoint:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
 
@@ -645,6 +825,8 @@ app.post('/api/generate', async (req, res) => {
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
     }
+    
+    console.log(`Generating document - Query: "${query}", Output type: ${outputType}, Grant type: ${grantType || 'none'}`);
     
     // Configure the model - using Gemini 1.5 Flash
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -879,6 +1061,10 @@ app.post('/api/generate', async (req, res) => {
         ## REFERENCES
         [List of key references cited in the proposal]`;
       }
+      
+      prompt += `\n\nPlease ensure all sections are detailed and specific to the query: ${query}.
+      
+      IMPORTANT: Make all tables well-formatted with proper rows and columns to be easily converted to a Word document table.`;
     } else if (outputType === 'pdf') {
       prompt = `Generate a structured PDF document with ${numPages} pages about: ${query}.
       
@@ -973,18 +1159,35 @@ app.post('/api/generate', async (req, res) => {
     }
     
     // Generate content
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
-    
-    res.json({
-      content: text,
-      outputType,
-      numPages
-    });
+    try {
+      const result = await model.generateContent(prompt);
+      
+      if (!result || !result.response) {
+        console.error('Empty response from Gemini API');
+        return res.status(500).json({ error: 'Empty response from AI model' });
+      }
+      
+      const text = result.response.text();
+      
+      if (!text) {
+        console.error('Empty text in Gemini API response');
+        return res.status(500).json({ error: 'AI model returned empty content' });
+      }
+      
+      console.log(`Successfully generated content (${text.length} characters)`);
+      
+      res.json({
+        content: text,
+        outputType,
+        grantType: outputType === 'grant' ? grantType : null
+      });
+    } catch (modelError) {
+      console.error('Error from Gemini API:', modelError);
+      return res.status(500).json({ error: 'Error generating content from AI model', details: modelError.message });
+    }
   } catch (error) {
     console.error('Error generating document:', error);
-    res.status(500).json({ error: 'Error generating document' });
+    res.status(500).json({ error: 'Error generating document', details: error.message });
   }
 });
 

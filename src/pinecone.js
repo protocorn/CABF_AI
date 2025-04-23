@@ -13,6 +13,50 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // The name of the index where CABF documents are stored
 const INDEX_NAME = 'cafb';
 
+// Sample data for relevant documents
+const SAMPLE_DOCUMENTS = [
+  {
+    id: 'doc1',
+    score: 0.89,
+    metadata: {
+      title: 'Food Distribution Programs',
+      content: 'The Capital Area Food Bank operates several distribution programs to serve communities in need. Our main programs include the Family Market Program, which provides fresh produce and healthy groceries to families, and the Senior Brown Bag Program, which delivers nutritious food to seniors with limited mobility.'
+    }
+  },
+  {
+    id: 'doc2',
+    score: 0.85,
+    metadata: {
+      title: 'Volunteer Opportunities',
+      content: 'Volunteers are essential to our mission. Opportunities include sorting and packing food donations, assisting at distribution events, delivering meals to seniors, and providing administrative support. Group volunteering is available for corporate teams, schools, and community organizations.'
+    }
+  },
+  {
+    id: 'doc3',
+    score: 0.78,
+    metadata: {
+      title: 'Nutrition Education',
+      content: 'Our nutrition education programs teach families how to prepare healthy meals on a budget. We offer cooking demonstrations, grocery shopping tours, and workshops on meal planning. These programs help communities make healthier food choices and prevent diet-related health conditions.'
+    }
+  },
+  {
+    id: 'doc4',
+    score: 0.75,
+    metadata: {
+      title: 'Partner Agency Network',
+      content: 'The Capital Area Food Bank partners with over 450 nonprofit organizations to distribute food throughout the region. Our partner agencies include food pantries, soup kitchens, shelters, and community centers that directly serve people facing hunger in their neighborhoods.'
+    }
+  },
+  {
+    id: 'doc5',
+    score: 0.71,
+    metadata: {
+      title: 'Donation Guidelines',
+      content: 'We accept donations of non-perishable food items, fresh produce, and monetary contributions. The most needed items include canned proteins, grains, and shelf-stable milk. Financial donations allow us to purchase food in bulk at reduced costs, maximizing the impact of your contribution.'
+    }
+  }
+];
+
 // Function to initialize Pinecone client and get the index
 async function getPineconeIndex() {
   try {
@@ -25,7 +69,12 @@ async function getPineconeIndex() {
 }
 
 // Function to query Pinecone for relevant documents
-async function queryPinecone(query, topK = 5) {
+async function queryPinecone(query, topK = 5, useSampleData = true) {
+  if (useSampleData) {
+    console.log(`Using sample data for query: "${query}"`);
+    return SAMPLE_DOCUMENTS.slice(0, topK);
+  }
+  
   try {
     const index = await getPineconeIndex();
     
@@ -77,7 +126,16 @@ async function generateEmbedding(text) {
 }
 
 // Function to fetch document content by ID
-async function getDocumentById(docId) {
+async function getDocumentById(docId, useSampleData = true) {
+  if (useSampleData) {
+    const document = SAMPLE_DOCUMENTS.find(doc => doc.id === docId);
+    if (document) {
+      return document;
+    } else {
+      throw new Error(`Sample document with ID ${docId} not found`);
+    }
+  }
+  
   try {
     const index = await getPineconeIndex();
     const response = await index.fetch([docId]);
@@ -94,7 +152,7 @@ async function getDocumentById(docId) {
 }
 
 // Function to get full context from multiple document IDs
-async function getContextFromDocuments(documentIds) {
+async function getContextFromDocuments(documentIds, useSampleData = true) {
   if (!documentIds || documentIds.length === 0) {
     return '';
   }
@@ -103,7 +161,7 @@ async function getContextFromDocuments(documentIds) {
     const documents = await Promise.all(
       documentIds.map(async (docId) => {
         try {
-          return await getDocumentById(docId);
+          return await getDocumentById(docId, useSampleData);
         } catch (error) {
           console.error(`Error fetching document ${docId}:`, error);
           return null;
