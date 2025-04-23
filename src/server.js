@@ -31,79 +31,34 @@ app.get('/', (req, res) => {
 });
 
 // API endpoint for document retrieval from Pinecone
-app.post('/api/search-documents', async (req, res) => {
+app.post('/api/search-documents', async (req, res) => { 
   try {
-    const { query } = req.body;
-    
+  const { query, fileName } = req.body;
+
+  if (!query) {
+    return res.status(400).json({ error: 'Query is required' });
+  }
+
+  const documents = await queryPinecone(query, 10, fileName || null); // Pass filename filter
+  res.json({ documents });
+} catch (error) {
+  console.error('Error in search endpoint:', error);
+  res.status(500).json({ error: 'Internal server error' });
+}
+});
+
+app.post('/api/query-pinecone', async (req, res) => {
+  try {
+    const { query, topK } = req.body;
+
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
     }
-    
-    // Search for relevant documents in Pinecone
-    try {
-      const documents = await queryPinecone(query);
-      res.json({ documents });
-    } catch (error) {
-      console.error('Error searching documents:', error);
-      
-      // Provide mock data for any Pinecone errors (dimension mismatch, connection, etc.)
-      console.log('Returning mock documents due to Pinecone error');
-      const mockDocuments = [
-        {
-          id: 'doc1',
-          score: 0.95,
-          metadata: {
-            title: 'Capital Area Food Bank Grant Proposal',
-            content: 'The Capital Area Food Bank has been serving the DC metro area for over 40 years. Our mission is to address hunger today and build healthier futures tomorrow for residents struggling with food insecurity.',
-            type: 'grant_proposal',
-            url: 'https://example.com/cabf-grant-1'
-          }
-        },
-        {
-          id: 'doc2',
-          score: 0.92,
-          metadata: {
-            title: 'CABF Community Impact Report 2023',
-            content: 'In 2023, the Capital Area Food Bank distributed over 45 million meals to families facing food insecurity across Washington DC, Maryland, and Virginia. Our programs reached more than 400,000 individuals.',
-            type: 'impact_report',
-            url: 'https://example.com/cabf-impact-2023'
-          }
-        },
-        {
-          id: 'doc3',
-          score: 0.89,
-          metadata: {
-            title: 'Food Insecurity in the DMV Region: Research Study',
-            content: 'Food insecurity affects over 400,000 residents in the DC, Maryland, and Virginia region, with particularly high rates among children and seniors. Economic challenges from inflation have increased need by 30%.',
-            type: 'research',
-            url: 'https://example.com/cabf-research-dmv'
-          }
-        },
-        {
-          id: 'doc4',
-          score: 0.85,
-          metadata: {
-            title: 'CABF Nutrition Education Program',
-            content: 'The Capital Area Food Bank\'s nutrition education program provides resources and workshops to help families prepare healthy meals on a budget, promoting long-term health and well-being.',
-            type: 'program_description',
-            url: 'https://example.com/cabf-nutrition'
-          }
-        },
-        {
-          id: 'doc5',
-          score: 0.83,
-          metadata: {
-            title: 'Emergency Food Assistance Program Guidelines',
-            content: 'The Emergency Food Assistance Program (TEFAP) provides food to low-income individuals through our network of partner agencies. Eligibility is determined based on household income and size.',
-            type: 'program_guidelines',
-            url: 'https://example.com/cabf-tefap'
-          }
-        }
-      ];
-      res.json({ documents: mockDocuments });
-    }
+
+    const results = await queryPinecone(query, topK || 5);
+    res.json({ results });
   } catch (error) {
-    console.error('Error in search endpoint:', error);
+    console.error('Error querying Pinecone:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
