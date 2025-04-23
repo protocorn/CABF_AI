@@ -68,6 +68,22 @@ async function getPineconeIndex() {
   }
 }
 
+async function generateEmbedding(text) {
+  try {
+    const embeddingModel = genAI.getGenerativeModel({ model: "embedding-001" });
+    const result = await embeddingModel.embedContent(text);
+    const embedding = result.embedding.values;
+
+    // Resize and normalize to 512 dimensions
+    const resized = embedding.slice(0, 512);
+    const magnitude = Math.sqrt(resized.reduce((sum, val) => sum + val * val, 0));
+    return resized.map(val => val / magnitude);
+  } catch (error) {
+    console.error('Error generating embedding:', error);
+    throw error;
+  }
+}
+
 // Function to query Pinecone for relevant documents
 async function queryPinecone(query, topK = 5, useSampleData = true) {
   if (useSampleData) {
@@ -77,51 +93,71 @@ async function queryPinecone(query, topK = 5, useSampleData = true) {
   
   try {
     const index = await getPineconeIndex();
-    
+
     // Generate embedding for the query
     const queryEmbedding = await generateEmbedding(query);
-    
-    // Query vectors based on the user's query
+    console.log('Query Embedding:', queryEmbedding);
+
+    // Query Pinecone for documents with type: document
     const queryResponse = await index.query({
       topK,
       includeMetadata: true,
       vector: queryEmbedding,
+      filter: { type: 'document' }, // Filter to include only documents
+    });
+    console.log('Query Response:', queryResponse);
+
+    const matches = queryResponse.matches || [];
+    console.log('Matches:', matches);
+
+    // Filter matches by valid embeddings
+    const validMatches = matches.filter(match => match.values && match.values.length > 0);
+    console.log('Valid Matches:', validMatches);
+
+    // Calculate cosine similarity for each match
+    const resultsWithSimilarity = validMatches.map(match => {
+      const similarity = cosineSimilarity(queryEmbedding, match.values || []);
+      return {
+        id: match.id,
+        score: match.score,
+        similarity,
+        metadata: match.metadata,
+      };
     });
 
-    // Extract and return the documents from the query results
-    return queryResponse.matches.map(match => ({
-      id: match.id,
-      score: match.score,
-      metadata: match.metadata,
-    }));
+    // Sort results by similarity in descending order
+    const sortedResults = resultsWithSimilarity.sort((a, b) => b.similarity - a.similarity);
+
+    console.log('Sorted Results:', sortedResults);
+
+    // Return the top results
+    return sortedResults.slice(0, topK);
   } catch (error) {
     console.error('Error querying Pinecone:', error);
     throw error;
   }
 }
 
-// Function to generate embeddings using Google's Gemini API
-async function generateEmbedding(text) {
+async function fetchPineconeData(query, contentTypeFilter = null) {
   try {
-    // Use the embedding model
-    const embeddingModel = genAI.getGenerativeModel({ model: "embedding-001" });
-    
-    // Generate embedding
-    const result = await embeddingModel.embedContent(text);
-    const embedding = result.embedding.values;
-    
-    // Resize from 768 dimensions to 512 dimensions to match Pinecone index
-    // Method 1: Simple truncation (take first 512 values)
-    const resizedEmbedding = embedding.slice(0, 512);
-    
-    // Normalize the embedding to unit length to maintain similarity properties
-    const magnitude = Math.sqrt(resizedEmbedding.reduce((sum, val) => sum + val * val, 0));
-    const normalizedEmbedding = resizedEmbedding.map(val => val / magnitude);
-    
-    return normalizedEmbedding;
+    const response = await fetch('/api/query-pinecone', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, topK: 5, contentTypeFilter }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch data from Pinecone');
+    }
+
+    const data = await response.json();
+    console.log('Pinecone data:', data);
+    return data.results;
   } catch (error) {
-    console.error('Error generating embedding:', error);
-    throw error;
+    console.error('Error fetching Pinecone data:', error);
+    return [];
   }
 }
 
@@ -156,7 +192,7 @@ async function getContextFromDocuments(documentIds, useSampleData = true) {
   if (!documentIds || documentIds.length === 0) {
     return '';
   }
-  
+
   try {
     const documents = await Promise.all(
       documentIds.map(async (docId) => {
@@ -168,29 +204,26 @@ async function getContextFromDocuments(documentIds, useSampleData = true) {
         }
       })
     );
-    
+
     // Filter out any null results and extract content
     const validDocuments = documents.filter(doc => doc !== null);
-    
+
     if (validDocuments.length === 0) {
       return '';
     }
-    
+
     // Combine the content from all documents
     let context = 'Using context from Capital Area Food Bank documents:\n\n';
-    
+
     validDocuments.forEach((doc, index) => {
-      if (doc.metadata && doc.metadata.title) {
-        context += `DOCUMENT ${index + 1}: ${doc.metadata.title}\n`;
-        if (doc.metadata.content) {
-          context += `${doc.metadata.content}\n\n`;
-        }
-      }
+      const title = doc.metadata?.title || `Document ${index + 1}`;
+      const content = doc.metadata?.content || doc.metadata?.text_excerpt || '';
+      context += `DOCUMENT ${index + 1}: ${title}\n${content}\n\n`;
     });
-    
+
     return context;
   } catch (error) {
-    console.error('Error getting context from documents:', error);
+    console.error('Error getting context:', error);
     return '';
   }
 }
