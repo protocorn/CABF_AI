@@ -1020,18 +1020,25 @@ app.post('/api/generate', async (req, res) => {
       
       Continue with this exact format for all ${numPages} slides. Include introduction slides, content slides, and a conclusion slide.`;
     } else if (outputType === 'x') {
-      prompt = `Craft a structured Twitter/X post about: ${query}.
+      prompt = `Create a compelling Twitter post about: ${query}.
       
-      Format as:
+      Rules:
+      1. Keep it within 280 characters
+      2. Make it engaging and professional
+      3. Include relevant mentions and hashtags and make sure hashtags are not repeated
+      4. Add appropriate emojis
+      5. DO NOT include any asterisks or unnecessary spacing
+      
+      Format the response exactly as:
       
       POST:
-      [Main content of the tweet - compelling and concise, within character limit]
+      [Main tweet content with emojis and mentions]
       
       HASHTAGS:
       [3-5 relevant hashtags]
       
       ENGAGEMENT PROMPT:
-      [Question or call to action to encourage engagement]`;
+      [Engaging question or call to action]`;
     } else if (outputType === 'instagram') {
       prompt = `Create an Instagram post about: ${query}.
       
