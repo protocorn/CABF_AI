@@ -1,0 +1,8 @@
+flask
+torch
+transformers
+pinecone-client
+python-dotenv
+numpy
+requests
+sentence-transformers

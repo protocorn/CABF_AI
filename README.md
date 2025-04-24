@@ -52,7 +52,11 @@ PORT=3030
    - Metric: cosine
    - Pod Type: starter or higher
 
-3. Add your documents to the index (you'll need to convert them to vector embeddings first)
+3. Upload sample documents to your index using the provided script:
+   ```bash
+   npm run upload-samples
+   ```
+   This will populate your Pinecone index with sample Capital Area Food Bank documents for testing.
 
 ## Running the Application
 
