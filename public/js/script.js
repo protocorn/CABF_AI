@@ -241,31 +241,74 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (!response.ok) {
+                // Check if this is a Pinecone-specific error
+                const errorData = await response.json();
+                if (errorData && errorData.source === 'pinecone') {
+                    throw new Error(`Pinecone search failed: ${errorData.details || errorData.error}`);
+                }
                 throw new Error('Failed to search documents');
             }
             
             const data = await response.json();
+            console.log('Search results:', data.documents);
             
             // Display the search results
             if (data.documents && data.documents.length > 0) {
                 const resultsHtml = `
                     <div class="documents-list">
-                        ${data.documents.map((doc, index) => `
+                        ${data.documents.map((doc, index) => {
+                            // Get appropriate content based on document type
+                            let docContent = '';
+                            
+                            // Ensure metadata exists
+                            doc.metadata = doc.metadata || {};
+                            
+                            // Add fallback for title
+                            let docTitle = doc.metadata.title || doc.title || 'Untitled Document';
+                            
+                            // Handle different metadata structures
+                            if (doc.metadata.text_excerpt) {
+                                docContent = doc.metadata.text_excerpt;
+                            } else if (doc.metadata.content_excerpt) {
+                                docContent = doc.metadata.content_excerpt;
+                            } else if (doc.metadata.content) {
+                                docContent = doc.metadata.content;
+                            } else if (doc.content) {
+                                docContent = doc.content;
+                            } else {
+                                docContent = 'No content available';
+                            }
+                            
+                            // If title is empty, try to create one from filename or other metadata
+                            if (!docTitle && doc.metadata.file_name) {
+                                docTitle = doc.metadata.file_name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+                            }
+                            
+                            // Document type display
+                            const docType = doc.metadata.type || doc.type || (doc.id && doc.id.includes('grant') ? 'Grant Document' : 'Document');
+                            
+                            // File info display for grant documents
+                            const fileInfo = doc.metadata.file_name ? 
+                                `<p class="document-file"><i class="fas fa-file-alt"></i> ${doc.metadata.file_name}</p>` : '';
+                            
+                            return `
                             <div class="document-item">
                                 <div class="document-checkbox">
-                                    <input type="checkbox" id="doc-${index}" data-id="${doc.id}">
+                                    <input type="checkbox" id="doc-${index}" data-id="${doc.id || 'doc-'+index}">
                                 </div>
                                 <div class="document-info">
-                                    <h3>${doc.metadata.title}</h3>
-                                    <p class="document-type">${doc.metadata.type}</p>
-                                    <p class="document-content">${doc.metadata.content}</p>
+                                    <h3>${docTitle}</h3>
+                                    <p class="document-type">${docType}</p>
+                                    ${fileInfo}
+                                    <p class="document-content">${docContent}</p>
                                     <div class="document-meta">
-                                        <span class="document-relevance">Relevance: ${(doc.score * 100).toFixed(1)}%</span>
+                                        <span class="document-relevance">Relevance: ${Math.abs((doc.score || 0) * 100).toFixed(1)}%</span>
                                         ${doc.metadata.url ? `<a href="${doc.metadata.url}" target="_blank" class="document-link">View Source</a>` : ''}
                                     </div>
                                 </div>
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 `;
                 searchResults.innerHTML = resultsHtml;
@@ -343,7 +386,62 @@ document.addEventListener('DOMContentLoaded', function() {
             outputContent.innerHTML = '';
             outputActions.innerHTML = '';
             
-            // Prepare request data
+            // Check if it's a PowerPoint with template
+            if (outputType === 'ppt-template') {
+                // For PowerPoint template generation, use a different approach
+                const numSlides = numPagesInput.value || 5;
+                
+                // Show special loading message for PowerPoint
+                loading.textContent = 'Generating PowerPoint presentation with CAFB template...';
+                
+                // Direct download for PowerPoint template
+                const response = await fetch('/api/generate-ppt-from-template', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query,
+                        numSlides: parseInt(numSlides)
+                    })
+                });
+                
+                if (!response.ok) {
+                    // Try to get more detailed error information
+                    try {
+                        const errorData = await response.json();
+                        throw new Error(errorData.details || errorData.error || 'Failed to generate PowerPoint presentation');
+                    } catch (jsonError) {
+                        throw new Error('Failed to generate PowerPoint presentation');
+                    }
+                }
+                
+                // Get the PowerPoint file as a blob
+                const blob = await response.blob();
+                
+                // Create a download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'CAFB_Presentation.pptx';
+                
+                // Add to the document and trigger download
+                document.body.appendChild(a);
+                a.click();
+                
+                // Clean up
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // Hide loading indicator and show success message
+                loading.classList.add('hidden');
+                outputContent.innerHTML = '<div class="success-message"><i class="fas fa-check-circle"></i> PowerPoint presentation successfully generated and downloaded!</div>';
+                
+                return;
+            }
+            
+            // Prepare request data for other document types
             const data = {
                 query,
                 outputType,

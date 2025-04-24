@@ -11,7 +11,7 @@ const pinecone = new Pinecone({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Define index name - make sure this matches the one in pinecone.js
-const INDEX_NAME = 'cafb';
+const INDEX_NAME = 'cafbai';
 
 // Sample CABF documents to upload
 const sampleDocuments = [
